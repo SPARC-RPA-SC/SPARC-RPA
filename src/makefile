@@ -75,7 +75,7 @@ CPPFLAGS += -DENABLE_SIMD_COMPLEX
 endif
 
 # for old Intel compiler, use -qopenmp instead of -fopenmp. ICC 17 and later also accepts -fopenmp. 
-CFLAGS = -std=gnu99 -O3 -fopenmp
+CFLAGS = -std=gnu99 -O3 -fopenmp -Wimplicit-function-declaration
 
 OBJSC = main.o initialization.o readfiles.o atomdata.o parallelization.o relax.o tools.o md.o    \
         electrostatics.o electronicGroundState.o electronDensity.o orbitalElecDensInit.o         \
@@ -84,9 +84,13 @@ OBJSC = main.o initialization.o readfiles.o atomdata.o parallelization.o relax.o
         linearSolver.o mixing.o exchangeCorrelation.o eigenSolver.o eigenSolverKpt.o energy.o    \
         forces.o stress.o pressure.o finalization.o spinOrbitCoupling.o                          \
         xc/vdW/d3/d3Correction.o xc/vdW/d3/find_r0ab.o xc/vdW/d3/copyC6.o                        \
-        xc/vdW/vdWDF/vdWDFGenerateKernelSpline.o xc/vdW/vdWDF/vdWDFExchangeLinearCorre.o         \
-        xc/vdW/vdWDF/vdWDFNonlinearCorre.o xc/mgga/scan.o xc/mgga/mgga.o xc/mgga/Sscan.o         \
-        xc/mgga/energyDensity.o xc/exx/exactExchange.o xc/exx/exactExchangeKpt.o                 \
+        xc/vdW/d3/d3initializeFinalize.o \
+        xc/vdW/vdWDF/vdWDFinitializeFinalize.o xc/vdW/vdWDF/vdWDFgenerateKernelSpline.o          \
+        xc/vdW/vdWDF/vdWDFexchangeLinearCorre.o xc/vdW/vdWDF/vdWDFnonlinearCorre.o               \
+        xc/vdW/vdWDF/vdWDFstress.o                            \
+        xc/mgga/energyDensity.o xc/mgga/scan.o xc/mgga/Sscan.o xc/mgga/MGGAexchangeCorrelation.o \
+        xc/mgga/MGGAhamiltonianTerm.o xc/mgga/MGGAinitializeFinalize.o xc/mgga/MGGAstress.o      \
+        xc/exx/exactExchange.o xc/exx/exactExchangeKpt.o                 \
         xc/exx/exactExchangeProperties.o orderN/sq/sq.o orderN/sq/sqNlocVecRoutines.o            \
         orderN/sq/sqParallelization.o orderN/sq/sqProperties.o orderN/sq/sqtool.o
 

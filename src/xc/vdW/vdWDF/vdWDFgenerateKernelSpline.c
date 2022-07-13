@@ -1,5 +1,5 @@
 /**
- * @file    vdWDFGenerateKernelSpline.c
+ * @file    vdWDFgenerateKernelSpline.c
  * @brief   This file contains the functions for generating the needed model kernel functions in reciprocal space
  *  and the value of spline functions at model energy ratios.
  *

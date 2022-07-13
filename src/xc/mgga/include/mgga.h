@@ -11,6 +11,8 @@
 #ifndef MGGA_H
 #define MGGA_H 
 
+#include "isddft.h"
+
 /**
  * @brief   allocate space to variables, initialize countSCF
  */

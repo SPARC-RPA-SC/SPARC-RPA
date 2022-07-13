@@ -1,5 +1,5 @@
 /**
- * @file    vdWDFExchangeLinearCorre.c
+ * @file    vdWDFexchangeLinearCorre.c
  * @brief   Calculate the XC potential without nonlinear correlation part of vdF-DF1 and vdW-DF2 functional.
  * Zhang-Yang revised PBE exchange + LDA PW91 correlation for vdW-DF1
  * PW86 exchange + LDA PW91 correlation for vdW-DF2
