@@ -32,7 +32,10 @@ double Calculate_occupation(SPARC_OBJ *pSPARC, double x1, double x2, double tol,
 double Calculate_FermiLevel(SPARC_OBJ *pSPARC, double x1, double x2, double tol, int max_iter, 
     double (*constraint)(SPARC_OBJ*, double));
 
+void collect_all_lambda(SPARC_OBJ *pSPARC, double *totalLambdaArray);
 
+double local_Calculate_FermiLevel(SPARC_OBJ *pSPARC, double x1, double x2, double *totalLambdaArray, double tol, int max_iter,
+                                  double (*constraint)(SPARC_OBJ *, double *, double));
 /**
  * @brief   Fermi Dirac function.
  */
@@ -68,6 +71,8 @@ double smearing_function(double beta, double lambda, double lambda_f, int type);
  *
  */
 double occ_constraint(SPARC_OBJ *pSPARC, double lambda_f);
+
+double local_occ_constraint(SPARC_OBJ *pSPARC, double *totalLambdaArray, double lambda_f);
 
 
 #endif // OCCUPATION_H
