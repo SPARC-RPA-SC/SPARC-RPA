@@ -53,7 +53,7 @@ double Calculate_occupation(SPARC_OBJ *pSPARC, double x1, double x2, double tol,
     int totalLambdaNumber = pSPARC->Nspin * pSPARC->Nkpts_sym * Ns;
     double *totalLambdaArray = (double *)calloc(totalLambdaNumber, sizeof(double));
     collect_all_lambda(pSPARC, totalLambdaArray);
-    Efermi = local_Calculate_FermiLevel(pSPARC, x1, x2, totalLambdaArray, totalLambdaNumber, tol, max_iter, local_occ_constraint);
+    Efermi = local_Calculate_FermiLevel(pSPARC, x1, x2, totalLambdaArray, tol, max_iter, local_occ_constraint);
 
     // find occupations
     if (pSPARC->isGammaPoint) { // for gamma-point systems
