@@ -451,7 +451,7 @@ double local_occ_constraint(SPARC_OBJ *pSPARC, double *totalLambdaArray, double 
                 // TODO: each k-point group should access its local kpoints!
                 for (n = 0; n < Ns; n++)
                 {
-                    g += (2.0 / pSPARC->Nspin / pSPARC->Nspinor) * pSPARC->kptWts[k] * smearing_function(pSPARC->Beta, pSPARC->lambda[count], lambda_f, pSPARC->elec_T_type);
+                    g += (2.0 / pSPARC->Nspin / pSPARC->Nspinor) * pSPARC->kptWts[k] * smearing_function(pSPARC->Beta, totalLambdaArray[count], lambda_f, pSPARC->elec_T_type);
                     count++;
                 }
             }
