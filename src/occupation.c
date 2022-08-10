@@ -94,28 +94,48 @@ void collect_all_lambda(SPARC_OBJ *pSPARC, double *totalLambdaArray)
     if (pSPARC->isGammaPoint)
     {
         // if (pSPARC->npspin != 1) { // collect the lambda from the processor in other spin comm
-        MPI_Allgather(pSPARC->lambda, Ns, MPI_DOUBLE, totalLambdaArray, Ns, MPI_DOUBLE, pSPARC->spin_bridge_comm);
+        MPI_Allgather(pSPARC->lambda, pSPARC->Nspin_spincomm * Ns, MPI_DOUBLE, totalLambdaArray, pSPARC->Nspin_spincomm * Ns, MPI_DOUBLE, pSPARC->spin_bridge_comm);
         // }
     }
     else
     {
-        int localArrayLength = -1;
-        int localArrayDispl = -1;
         // distribution of totalLambdaArray: [spin_up_k0, spin_up_k1, ..., spin_dn_k0, spin_dn_k1, ...]
-        // if (pSPARC->npkpt != 1) { // sum over processes with the same rank in kptcomm to find g
-        localArrayLength = Ns * Nk;
+        // sum over processes with the same rank in kptcomm to find g
+        int localArrayLength = Ns * Nk;
         MPI_Allgather(&localArrayLength, 1, MPI_INT, kptBridgeCounts, 1, MPI_INT, pSPARC->kpt_bridge_comm);
-        localArrayDispl = Ns * kpt_start_indx;
+        int localArrayDispl = Ns * kpt_start_indx;
         MPI_Allgather(&localArrayDispl, 1, MPI_INT, kptBridgeDispls, 1, MPI_INT, pSPARC->kpt_bridge_comm);
-        MPI_Allgatherv(pSPARC->lambda, Ns * pSPARC->Nkpts_kptcomm, MPI_DOUBLE,
-                       theSpinLambdaArray, kptBridgeCounts, kptBridgeDispls,
-                       MPI_DOUBLE, pSPARC->kpt_bridge_comm);
-        // }
-
-        // if (pSPARC->npspin != 1) { // collect the lambda from the processor in other spin comm
-        MPI_Allgather(theSpinLambdaArray, Ns * pSPARC->Nkpts_sym, MPI_DOUBLE, totalLambdaArray, Ns * pSPARC->Nkpts_sym, MPI_DOUBLE, pSPARC->spin_bridge_comm);
-        // }
+        if (pSPARC->Nspin_spincomm == 1) { // 2 spins are divided into 2 spin-comm
+            MPI_Allgatherv(pSPARC->lambda, Ns * pSPARC->Nkpts_kptcomm, MPI_DOUBLE,
+                           theSpinLambdaArray, kptBridgeCounts, kptBridgeDispls,
+                           MPI_DOUBLE, pSPARC->kpt_bridge_comm);
+    
+            // collect the lambda from the processor in other spin comm
+            MPI_Allgather(theSpinLambdaArray, Ns * pSPARC->Nkpts_sym, MPI_DOUBLE, totalLambdaArray, Ns * pSPARC->Nkpts_sym, MPI_DOUBLE, pSPARC->spin_bridge_comm);
+        }
+        else if (pSPARC->Nspin_spincomm == 2) { // both spins are in the same spin-comm
+            for (int spinIndex = 0; spinIndex < pSPARC->Nspin_spincomm; spinIndex++) {
+                MPI_Allgatherv(pSPARC->lambda + spinIndex*localArrayLength, Ns * pSPARC->Nkpts_kptcomm, MPI_DOUBLE,
+                           totalLambdaArray + spinIndex * (Ns * pSPARC->Nkpts_sym), kptBridgeCounts, kptBridgeDispls,
+                           MPI_DOUBLE, pSPARC->kpt_bridge_comm);
+            }
+        }
     }
+    // for debugging 
+    #ifdef DEBUG
+        for (int spinIndex = 0; spinIndex < pSPARC->Nspin_spincomm; spinIndex++) {
+            int count = 0;
+            for (int kptIndex = 0; kptIndex < Nk; kptIndex++) {
+                for (int bandIndex = 0; bandIndex < Ns; bandIndex++) {
+                    if (fabs(totalLambdaArray[count + Ns * pSPARC->Nkpts_sym * (spin_start_indx + spinIndex) + Ns * kpt_start_indx] - pSPARC->lambda[count + Ns * pSPARC->Nkpts_kptcomm * spinIndex]) > 1e-8)
+                        printf("lambda %d local spin %d kpt %d (global spin %d kpt %d) is different after gather! %.9f %.9f\n", 
+                            bandIndex, spinIndex, kptIndex, spinIndex + spin_start_indx, kptIndex + kpt_start_indx, totalLambdaArray[count + Ns * pSPARC->Nkpts_sym * (spin_start_indx + spinIndex) + Ns * kpt_start_indx],
+                            pSPARC->lambda[Ns * pSPARC->Nkpts_kptcomm * spinIndex]);
+                    count++;
+                }
+            }
+        }
+    #endif    
     free(kptBridgeCounts);
     free(kptBridgeDispls);
     free(theSpinLambdaArray);
