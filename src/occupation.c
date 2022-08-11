@@ -51,7 +51,8 @@ double Calculate_occupation(SPARC_OBJ *pSPARC, double x1, double x2, double tol,
     // find fermi level using Brent's method
     // Efermi = Calculate_FermiLevel(pSPARC, x1, x2, tol, max_iter, occ_constraint);
     int totalLambdaNumber = pSPARC->Nspin * pSPARC->Nkpts_sym * Ns;
-    double *totalLambdaArray = (double *)calloc(totalLambdaNumber, sizeof(double));
+    pSPARC->totalLambdaArray = (double *)calloc(totalLambdaNumber, sizeof(double));
+    double *totalLambdaArray = pSPARC->totalLambdaArray;
     collect_all_lambda(pSPARC, totalLambdaArray);
     Efermi = local_Calculate_FermiLevel(pSPARC, x1, x2, totalLambdaArray, tol, max_iter, local_occ_constraint);
 
@@ -77,6 +78,7 @@ double Calculate_occupation(SPARC_OBJ *pSPARC, double x1, double x2, double tol,
             }
         }    
     }
+    free(pSPARC->totalLambdaArray);
     return Efermi;
 }
 
@@ -253,7 +255,7 @@ double Calculate_FermiLevel(SPARC_OBJ *pSPARC, double x1, double x2, double tol,
 
 
 double local_Calculate_FermiLevel(SPARC_OBJ *pSPARC, double x1, double x2, double *totalLambdaArray, double tol, int max_iter,
-                                  double (*constraint)(SPARC_OBJ *, double *, double))
+                                  double (*constraint)(SPARC_OBJ *, double))
 {
 #define EPSILON 1e-16
 #define SIGN(a, b) ((b) > 0.0 ? fabs((a)) : -fabs((a)))
@@ -271,7 +273,7 @@ double local_Calculate_FermiLevel(SPARC_OBJ *pSPARC, double x1, double x2, doubl
     int iter;
     double tol1q, eq;
     double a = min(x1, x2), b = max(x1, x2), c = b, d, e = 0.0, min1, min2;
-    double fa = constraint(pSPARC, totalLambdaArray, a), fb = constraint(pSPARC, totalLambdaArray, b), fc, p, q, r, s, tol1, xm;
+    double fa = constraint(pSPARC, a), fb = constraint(pSPARC, b), fc, p, q, r, s, tol1, xm;
 
     int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -284,8 +286,8 @@ double local_Calculate_FermiLevel(SPARC_OBJ *pSPARC, double x1, double x2, doubl
         a -= w / 2.0;
         b += w / 2.0;
         c = b;
-        fa = constraint(pSPARC, totalLambdaArray, a);
-        fb = constraint(pSPARC, totalLambdaArray, b);
+        fa = constraint(pSPARC, a);
+        fb = constraint(pSPARC, b);
 #ifdef DEBUG
         if (rank == 0)
             printf("Fermi level calculation: expanded bounds = (%10.6E,%10.6E), (fa,fb) = (%10.6E,%10.6E)\n",
@@ -384,7 +386,7 @@ double local_Calculate_FermiLevel(SPARC_OBJ *pSPARC, double x1, double x2, doubl
         {
             b += SIGN(tol1, xm);
         }
-        fb = constraint(pSPARC, totalLambdaArray, b);
+        fb = constraint(pSPARC, b);
     }
     printf("Maximum iterations exceeded in brents root finding method...exiting\n");
     exit(EXIT_FAILURE);
@@ -441,11 +443,12 @@ double occ_constraint(SPARC_OBJ *pSPARC, double lambda_f)
     // return g - pSPARC->Nelectron; // this will work even when Ns = Nelectron/2
 }
 
-double local_occ_constraint(SPARC_OBJ *pSPARC, double *totalLambdaArray, double lambda_f)
+double local_occ_constraint(SPARC_OBJ *pSPARC, double lambda_f)
 {
     // all processors entering the function have dmcomm
     if (pSPARC->kptcomm_index < 0)
         return 0.0;
+    double *totalLambdaArray = pSPARC->totalLambdaArray;
     int Ns = pSPARC->Nstates, n, k, spn_i;
     int count = 0;
     // TODO: confirm whether to use number of electrons or NegCharge
