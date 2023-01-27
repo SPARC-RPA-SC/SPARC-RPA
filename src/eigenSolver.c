@@ -195,8 +195,10 @@ void eigSolve_CheFSI(int rank, SPARC_OBJ *pSPARC, int SCFcount, double error) {
         // 1) Find Chebyshev filtering bounds
         // 2) Chebyshev filtering,          3) Projection, 
         // 4) Solve projected eigenproblem, 5) Subspace rotation
+        MPI_Barrier(MPI_COMM_WORLD); // for 1st SCF long time debug
         for (spn_i = 0; spn_i < pSPARC->Nspin_spincomm; spn_i++)
             CheFSI(pSPARC, lambda_cutoff, x0, count, 0, spn_i);
+        MPI_Barrier(MPI_COMM_WORLD); // for 1st SCF long time debug
 #ifdef DEBUG
         t1 = MPI_Wtime();
 #endif
@@ -210,19 +212,19 @@ void eigSolve_CheFSI(int rank, SPARC_OBJ *pSPARC, int SCFcount, double error) {
             if(pSPARC->lambda_sorted[(spn_i+1)*pSPARC->Nstates - 1] > eigmax_g)
                 eigmax_g = pSPARC->lambda_sorted[(spn_i+1)*pSPARC->Nstates - 1];
         }
-        
+        MPI_Barrier(MPI_COMM_WORLD); // for 1st SCF long time debug
         if (pSPARC->npspin != 1) { // find min/max over processes with the same rank in spincomm
             MPI_Allreduce(MPI_IN_PLACE, &eigmin_g, 1, MPI_DOUBLE, MPI_MIN, pSPARC->spin_bridge_comm);
             MPI_Allreduce(MPI_IN_PLACE, &eigmax_g, 1, MPI_DOUBLE, MPI_MAX, pSPARC->spin_bridge_comm);
         }
-        
+        MPI_Barrier(MPI_COMM_WORLD); // for 1st SCF long time debug
         //if (pSPARC->npspin != 1) { // find min/max over processes with the same rank in spincomm
         //    MPI_Allreduce(MPI_IN_PLACE, &eigmin_g, 1, MPI_DOUBLE, MPI_MIN, pSPARC->spin_bridge_comm);
         //    MPI_Allreduce(MPI_IN_PLACE, &eigmax_g, 1, MPI_DOUBLE, MPI_MAX, pSPARC->spin_bridge_comm);
         //}
-        
+        MPI_Barrier(MPI_COMM_WORLD); // for 1st SCF long time debug
         pSPARC->Efermi = Calculate_occupation(pSPARC, eigmin_g-1.0, eigmax_g+1.0, 1e-12, 100); 
-        
+        MPI_Barrier(MPI_COMM_WORLD); // for 1st SCF long time debug
         // check occupation (if Nstates is large enough) for every SCF
         // for(spn_i = 0; spn_i < pSPARC->Nspin_spincomm; spn_i++) {
         //     // check if occ(0.90*Ns) <= 1e-6, otherwise give warning
@@ -330,10 +332,12 @@ void CheFSI(SPARC_OBJ *pSPARC, double lambda_cutoff, double *x0, int count, int 
         );
     } else {
     #endif
+        MPI_Barrier(MPI_COMM_WORLD); // for 1st SCF long time debug
         ChebyshevFiltering(pSPARC, pSPARC->DMVertices_dmcomm, pSPARC->Xorb + spn_i*size_s, 
                            pSPARC->Yorb, pSPARC->Nband_bandcomm, 
                            pSPARC->ChebDegree, lambda_cutoff, pSPARC->eigmax[spn_i], pSPARC->eigmin[spn_i], k, spn_i, 
                            pSPARC->dmcomm, &t_temp);
+        MPI_Barrier(MPI_COMM_WORLD); // for 1st SCF long time debug
     #ifdef USE_EVA_MODULE
     }
     #endif
@@ -359,8 +363,10 @@ void CheFSI(SPARC_OBJ *pSPARC, double lambda_cutoff, double *x0, int count, int 
             pSPARC->nr_orb_BLCYC * pSPARC->nc_orb_BLCYC * sizeof(double));
         assert(pSPARC->Yorb_BLCYC != NULL);
     }
+    MPI_Barrier(MPI_COMM_WORLD); // for 1st SCF long time debug
     Project_Hamiltonian(pSPARC, pSPARC->DMVertices_dmcomm, pSPARC->Yorb, 
                         pSPARC->Hp, pSPARC->Mp, k, spn_i, pSPARC->dmcomm);
+    MPI_Barrier(MPI_COMM_WORLD); // for 1st SCF long time debug
     #endif
 
     #ifdef DEBUG
@@ -373,7 +379,9 @@ void CheFSI(SPARC_OBJ *pSPARC, double lambda_cutoff, double *x0, int count, int 
     #ifdef USE_DP_SUBEIG
     DP_Solve_Generalized_EigenProblem(pSPARC, spn_i);
     #else
+    MPI_Barrier(MPI_COMM_WORLD); // for 1st SCF long time debug
     Solve_Generalized_EigenProblem(pSPARC, k, spn_i);
+    MPI_Barrier(MPI_COMM_WORLD); // for 1st SCF long time debug
     #endif
     
     #ifdef DEBUG
@@ -428,10 +436,10 @@ void CheFSI(SPARC_OBJ *pSPARC, double lambda_cutoff, double *x0, int count, int 
     } else {
         YQ_BLCYC = pSPARC->Xorb + spn_i*size_s;
     }
-
+    MPI_Barrier(MPI_COMM_WORLD); // for 1st SCF long time debug
     Subspace_Rotation(pSPARC, pSPARC->Yorb_BLCYC, pSPARC->Q, 
                       YQ_BLCYC, pSPARC->Xorb + spn_i*size_s, k, spn_i);
-    
+    MPI_Barrier(MPI_COMM_WORLD); // for 1st SCF long time debug
     if (pSPARC->npband > 1) {
         free(YQ_BLCYC);
         free(pSPARC->Yorb_BLCYC);
@@ -1199,19 +1207,19 @@ void Project_Hamiltonian(SPARC_OBJ *pSPARC, int *DMVertices, double *Y,
     int sg  = pSPARC->spin_start_indx + spn_i;
     Nd_blacscomm = pSPARC->is_domain_uniform ? pSPARC->Nd : pSPARC->Nd_d_dmcomm;
     //my_nproc = pSPARC->npband;
-    my_nproc = pSPARC->is_domain_uniform ? (pSPARC->npband*pSPARC->npNd) : pSPARC->npband;;
-    gridsizes[0] = pSPARC->Nd_d_dmcomm;
-    gridsizes[1] = pSPARC->Nstates;
-    #ifdef DEBUG
-    t1 = MPI_Wtime();
-    #endif
-    ScaLAPACK_Dims_2D_BLCYC(my_nproc, gridsizes, my_dims);
-    #ifdef DEBUG
-    t2 = MPI_Wtime();
-    if(!rank && spn_i == 0) 
-        printf("New BLOCK CYCLIC DOMAIN: nproc = %d, dims = (%d, %d), Elapsed time is %.3f ms\n", 
-                my_nproc, my_dims[0], my_dims[1], (t2-t1)*1e3);
-    #endif
+    // my_nproc = pSPARC->is_domain_uniform ? (pSPARC->npband*pSPARC->npNd) : pSPARC->npband;;
+    // gridsizes[0] = pSPARC->Nd_d_dmcomm;
+    // gridsizes[1] = pSPARC->Nstates;
+    // #ifdef DEBUG
+    // t1 = MPI_Wtime();
+    // #endif
+    // ScaLAPACK_Dims_2D_BLCYC(my_nproc, gridsizes, my_dims);
+    // #ifdef DEBUG
+    // t2 = MPI_Wtime();
+    // if(!rank && spn_i == 0) 
+    //     printf("New BLOCK CYCLIC DOMAIN: nproc = %d, dims = (%d, %d), Elapsed time is %.3f ms\n", 
+    //             my_nproc, my_dims[0], my_dims[1], (t2-t1)*1e3);
+    // #endif
 
     int ONE = 1;
     double alpha = 1.0, beta = 0.0;
@@ -1221,6 +1229,7 @@ void Project_Hamiltonian(SPARC_OBJ *pSPARC, int *DMVertices, double *Y,
     t3 = MPI_Wtime();
     t1 = MPI_Wtime();
     #endif
+    MPI_Barrier(comm); // for 1st SCF long time debug
     if (pSPARC->npband > 1) {
         // distribute orbitals into block cyclic format
         pdgemr2d_(&Nd_blacscomm, &pSPARC->Nstates, Y, &ONE, &ONE, pSPARC->desc_orbitals,
@@ -1228,6 +1237,7 @@ void Project_Hamiltonian(SPARC_OBJ *pSPARC, int *DMVertices, double *Y,
     } else {
         pSPARC->Yorb_BLCYC = Y;
     }
+    MPI_Barrier(comm); // for 1st SCF long time debug
     #ifdef DEBUG
     t2 = MPI_Wtime();
     if(!rank && spn_i == 0) 
