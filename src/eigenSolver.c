@@ -316,9 +316,10 @@ void CheFSI(SPARC_OBJ *pSPARC, double lambda_cutoff, double *x0, int count, int 
     int size_s;
     
     size_s = pSPARC->Nd_d_dmcomm * pSPARC->Nband_bandcomm;
-
+    
 #ifdef DEBUG
     double t1, t2, t3;
+    MPI_Barrier(MPI_COMM_WORLD); // for 1st SCF long time debug
     t1 = MPI_Wtime();
 #endif
     // ** Chebyshev filtering ** //
@@ -332,21 +333,21 @@ void CheFSI(SPARC_OBJ *pSPARC, double lambda_cutoff, double *x0, int count, int 
         );
     } else {
     #endif
-        MPI_Barrier(MPI_COMM_WORLD); // for 1st SCF long time debug
         ChebyshevFiltering(pSPARC, pSPARC->DMVertices_dmcomm, pSPARC->Xorb + spn_i*size_s, 
                            pSPARC->Yorb, pSPARC->Nband_bandcomm, 
                            pSPARC->ChebDegree, lambda_cutoff, pSPARC->eigmax[spn_i], pSPARC->eigmin[spn_i], k, spn_i, 
                            pSPARC->dmcomm, &t_temp);
-        MPI_Barrier(MPI_COMM_WORLD); // for 1st SCF long time debug
     #ifdef USE_EVA_MODULE
     }
     #endif
     
     #ifdef DEBUG
+    MPI_Barrier(MPI_COMM_WORLD); // for 1st SCF long time debug
     t2 = MPI_Wtime();
     if(!rank && spn_i == 0) 
         printf("Total time for Chebyshev filtering (%d columns, degree = %d): %.3f ms\n", 
                 pSPARC->Nband_bandcomm, pSPARC->ChebDegree, (t2-t1)*1e3);
+    MPI_Barrier(MPI_COMM_WORLD); // for 1st SCF long time debug
     t1 = MPI_Wtime();
     #endif
     
@@ -363,15 +364,16 @@ void CheFSI(SPARC_OBJ *pSPARC, double lambda_cutoff, double *x0, int count, int 
             pSPARC->nr_orb_BLCYC * pSPARC->nc_orb_BLCYC * sizeof(double));
         assert(pSPARC->Yorb_BLCYC != NULL);
     }
-    MPI_Barrier(MPI_COMM_WORLD); // for 1st SCF long time debug
+    
     Project_Hamiltonian(pSPARC, pSPARC->DMVertices_dmcomm, pSPARC->Yorb, 
                         pSPARC->Hp, pSPARC->Mp, k, spn_i, pSPARC->dmcomm);
-    MPI_Barrier(MPI_COMM_WORLD); // for 1st SCF long time debug
     #endif
-
+    
     #ifdef DEBUG
+    MPI_Barrier(MPI_COMM_WORLD); // for 1st SCF long time debug
     t2 = MPI_Wtime();
     if(!rank && spn_i == 0) printf("Total time for projection: %.3f ms\n", (t2-t1)*1e3);
+    MPI_Barrier(MPI_COMM_WORLD); // for 1st SCF long time debug
     t1 = MPI_Wtime();
     #endif
     
@@ -379,12 +381,11 @@ void CheFSI(SPARC_OBJ *pSPARC, double lambda_cutoff, double *x0, int count, int 
     #ifdef USE_DP_SUBEIG
     DP_Solve_Generalized_EigenProblem(pSPARC, spn_i);
     #else
-    MPI_Barrier(MPI_COMM_WORLD); // for 1st SCF long time debug
     Solve_Generalized_EigenProblem(pSPARC, k, spn_i);
-    MPI_Barrier(MPI_COMM_WORLD); // for 1st SCF long time debug
     #endif
     
     #ifdef DEBUG
+    MPI_Barrier(MPI_COMM_WORLD); // for 1st SCF long time debug
     t3 = MPI_Wtime();
     #endif
 
@@ -401,6 +402,7 @@ void CheFSI(SPARC_OBJ *pSPARC, double lambda_cutoff, double *x0, int count, int 
     #endif //SPARCX_ACCEL
     
     #ifdef DEBUG
+    MPI_Barrier(MPI_COMM_WORLD); // for 1st SCF long time debug
     t2 = MPI_Wtime();
     if(!rank && spn_i == 0) {
         // print eigenvalues
@@ -421,6 +423,7 @@ void CheFSI(SPARC_OBJ *pSPARC, double lambda_cutoff, double *x0, int count, int 
         printf("Total time for solving generalized eigenvalue problem: %.3f ms\n", 
                 (t2-t1)*1e3);
     }
+    MPI_Barrier(MPI_COMM_WORLD); // for 1st SCF long time debug
     t1 = MPI_Wtime();
     #endif
     
@@ -436,10 +439,8 @@ void CheFSI(SPARC_OBJ *pSPARC, double lambda_cutoff, double *x0, int count, int 
     } else {
         YQ_BLCYC = pSPARC->Xorb + spn_i*size_s;
     }
-    MPI_Barrier(MPI_COMM_WORLD); // for 1st SCF long time debug
     Subspace_Rotation(pSPARC, pSPARC->Yorb_BLCYC, pSPARC->Q, 
                       YQ_BLCYC, pSPARC->Xorb + spn_i*size_s, k, spn_i);
-    MPI_Barrier(MPI_COMM_WORLD); // for 1st SCF long time debug
     if (pSPARC->npband > 1) {
         free(YQ_BLCYC);
         free(pSPARC->Yorb_BLCYC);
@@ -448,6 +449,7 @@ void CheFSI(SPARC_OBJ *pSPARC, double lambda_cutoff, double *x0, int count, int 
     #endif
     
     #ifdef DEBUG
+    MPI_Barrier(MPI_COMM_WORLD); // for 1st SCF long time debug
     t2 = MPI_Wtime();
     if(!rank) printf("Total time for subspace rotation: %.3f ms\n", (t2-t1)*1e3);
     #endif
@@ -601,10 +603,13 @@ void ChebyshevFiltering(
     double *time_info
 ) 
 {   
+    double tStart, tEnd;
+    MPI_Barrier(comm);
+    tStart = MPI_Wtime();
     if (comm == MPI_COMM_NULL || pSPARC->bandcomm_index < 0) return;
     // a0: minimum eigval, b: maxinum eigval, a: cutoff eigval
-    int rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank); 
+    int rank; int comm_rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank); MPI_Comm_rank(comm, &comm_rank); 
     #ifdef DEBUG   
     if(!rank && spn_i == 0) printf("Start Chebyshev filtering ... \n");
     #endif
@@ -622,7 +627,7 @@ void ChebyshevFiltering(
     c = 0.5 * (b + a);
     sigma = sigma1 = e / (a0 - c);
     gamma = 2.0 / sigma1;
-
+    MPI_Barrier(comm);
     t1 = MPI_Wtime();
     // find Y = (H - c*I)X
     int sg  = pSPARC->spin_start_indx + spn_i;
@@ -630,28 +635,37 @@ void ChebyshevFiltering(
         pSPARC, DMnd, DMVertices, pSPARC->Veff_loc_dmcomm + sg * pSPARC->Nd_d_dmcomm, 
         pSPARC->Atom_Influence_nloc, pSPARC->nlocProj, ncol, -c, X, Y, spn_i, comm
     );
-    t2 = MPI_Wtime();
+    MPI_Barrier(comm);
+    t2 = MPI_Wtime(); 
     *time_info += t2 - t1;
-        
+    double timeStep1 = (t2 - t1) * 1e3;
+    double generalTimeStep1 = 0.0;
+    MPI_Reduce(&timeStep1, &generalTimeStep1, 1, MPI_DOUBLE, MPI_MAX, 0, pSPARC->blacscomm);
     // scale Y by (sigma1 / e)
     vscal = sigma1 / e;
     for (i = 0; i < len_tot; i++) Y[i] *= vscal;
    
     Ynew = (double *)malloc( len_tot * sizeof(double));
-
+    MPI_Barrier(comm);
+    double timeStep2_1 = MPI_Wtime();
+    double cumStep2Hamil = 0.0;
+    double cumStep2For = 0.0;
     for (j = 1; j < m; j++) {
         sigma2 = 1.0 / (gamma - sigma);
-        
+        MPI_Barrier(comm);
         t1 = MPI_Wtime();
         // Ynew = (H - c*I)Y
         Hamiltonian_vectors_mult(
             pSPARC, DMnd, DMVertices, pSPARC->Veff_loc_dmcomm + sg * pSPARC->Nd_d_dmcomm, 
             pSPARC->Atom_Influence_nloc, pSPARC->nlocProj, ncol, -c, Y, Ynew, spn_i, comm
         );
+        MPI_Barrier(comm);
         t2 = MPI_Wtime();
         *time_info += t2 - t1;
-
+        cumStep2Hamil += (t2 - t1);
         // Ynew = (2*sigma2/e) * Ynew - (sigma*sigma2) * X, then update X and Y
+        MPI_Barrier(comm);
+        t1 = MPI_Wtime();
         vscal = 2.0 * sigma2 / e; vscal2 = sigma * sigma2;
 
         for (i = 0; i < len_tot; i++) {
@@ -662,8 +676,34 @@ void ChebyshevFiltering(
             Y[i] = Ynew[i];
         }        
         sigma = sigma2;
+        MPI_Barrier(comm);
+        t2 = MPI_Wtime();
+        cumStep2For += (t2 - t1);
     } 
+    MPI_Barrier(comm);
+    cumStep2Hamil *= 1e3;
+    double bandComm_cumStep2Hamil, generalCumStep2Hamil;
+    // MPI_Reduce(&cumStep2Hamil, &bandComm_cumStep2Hamil, 1, MPI_DOUBLE, MPI_MAX, 0, pSPARC->bandcomm);
+    MPI_Reduce(&bandComm_cumStep2Hamil, &generalCumStep2Hamil, 1, MPI_DOUBLE, MPI_MAX, 0, pSPARC->blacscomm);
+    cumStep2For *= 1e3;
+    double bandComm_cumStep2For, generalCumStep2For;
+    // MPI_Reduce(&cumStep2For, &bandComm_cumStep2For, 1, MPI_DOUBLE, MPI_MAX, 0, pSPARC->bandcomm);
+    MPI_Reduce(&bandComm_cumStep2For, &generalCumStep2For, 1, MPI_DOUBLE, MPI_MAX, 0, pSPARC->blacscomm);
+    double timeStep2_2 = MPI_Wtime();
+    double timeStep2 = (timeStep2_2 - timeStep2_1) * 1e3;
+    double generalTimeStep2 = 0.0;
+    MPI_Reduce(&timeStep2, &generalTimeStep2, 1, MPI_DOUBLE, MPI_MAX, 0, pSPARC->blacscomm);
     free(Ynew);
+    MPI_Barrier(comm);
+    tEnd = MPI_Wtime();
+    double totalTime = (tEnd - tStart)*1e3;
+    double generalTotalTime = 0.0;
+    MPI_Reduce(&totalTime, &generalTotalTime, 1, MPI_DOUBLE, MPI_MAX, 0, pSPARC->blacscomm);
+    if (!rank) printf("the max time of all processors spent on 1st part of Chebyshev Filtering is %.12f ms\n", generalTimeStep1);
+    if (!rank) printf("the max time of all processors spent on Hamil, 2nd part of Chebyshev Filtering is %.12f ms\n", generalCumStep2Hamil);
+    if (!rank) printf("the max time of all processors spent on For, 2nd part of Chebyshev Filtering is %.12f ms\n", generalCumStep2For);
+    if (!rank) printf("the max time of all processors spent on 2nd part of Chebyshev Filtering is %.12f ms\n", generalTimeStep2);
+    if (!rank) printf("the max time of all processors spent on Chebyshev Filtering is %.12f ms\n", generalTotalTime);
 }
 
 #ifdef USE_DP_SUBEIG
@@ -1207,19 +1247,19 @@ void Project_Hamiltonian(SPARC_OBJ *pSPARC, int *DMVertices, double *Y,
     int sg  = pSPARC->spin_start_indx + spn_i;
     Nd_blacscomm = pSPARC->is_domain_uniform ? pSPARC->Nd : pSPARC->Nd_d_dmcomm;
     //my_nproc = pSPARC->npband;
-    // my_nproc = pSPARC->is_domain_uniform ? (pSPARC->npband*pSPARC->npNd) : pSPARC->npband;;
-    // gridsizes[0] = pSPARC->Nd_d_dmcomm;
-    // gridsizes[1] = pSPARC->Nstates;
-    // #ifdef DEBUG
-    // t1 = MPI_Wtime();
-    // #endif
-    // ScaLAPACK_Dims_2D_BLCYC(my_nproc, gridsizes, my_dims);
-    // #ifdef DEBUG
-    // t2 = MPI_Wtime();
-    // if(!rank && spn_i == 0) 
-    //     printf("New BLOCK CYCLIC DOMAIN: nproc = %d, dims = (%d, %d), Elapsed time is %.3f ms\n", 
-    //             my_nproc, my_dims[0], my_dims[1], (t2-t1)*1e3);
-    // #endif
+    my_nproc = pSPARC->is_domain_uniform ? (pSPARC->npband*pSPARC->npNd) : pSPARC->npband;;
+    gridsizes[0] = pSPARC->Nd_d_dmcomm;
+    gridsizes[1] = pSPARC->Nstates;
+    #ifdef DEBUG
+    t1 = MPI_Wtime();
+    #endif
+    ScaLAPACK_Dims_2D_BLCYC(my_nproc, gridsizes, my_dims);
+    #ifdef DEBUG
+    t2 = MPI_Wtime();
+    if(!rank && spn_i == 0) 
+        printf("New BLOCK CYCLIC DOMAIN: nproc = %d, dims = (%d, %d), Elapsed time is %.3f ms\n", 
+                my_nproc, my_dims[0], my_dims[1], (t2-t1)*1e3);
+    #endif
 
     int ONE = 1;
     double alpha = 1.0, beta = 0.0;
@@ -1227,9 +1267,10 @@ void Project_Hamiltonian(SPARC_OBJ *pSPARC, int *DMVertices, double *Y,
     /* Calculate Mp = Y' * Y */
     #ifdef DEBUG
     t3 = MPI_Wtime();
+    MPI_Barrier(comm); // for 1st SCF long time debug
     t1 = MPI_Wtime();
     #endif
-    MPI_Barrier(comm); // for 1st SCF long time debug
+    
     if (pSPARC->npband > 1) {
         // distribute orbitals into block cyclic format
         pdgemr2d_(&Nd_blacscomm, &pSPARC->Nstates, Y, &ONE, &ONE, pSPARC->desc_orbitals,
@@ -1237,12 +1278,13 @@ void Project_Hamiltonian(SPARC_OBJ *pSPARC, int *DMVertices, double *Y,
     } else {
         pSPARC->Yorb_BLCYC = Y;
     }
-    MPI_Barrier(comm); // for 1st SCF long time debug
     #ifdef DEBUG
+    MPI_Barrier(comm); // for 1st SCF long time debug
     t2 = MPI_Wtime();
     if(!rank && spn_i == 0) 
         printf("rank = %2d, Distribute orbital to block cyclic format took %.3f ms\n", 
                 rank, (t2 - t1)*1e3);          
+    MPI_Barrier(comm); // for 1st SCF long time debug
     t1 = MPI_Wtime();
     #endif
     if (pSPARC->npband > 1) { 
@@ -1264,10 +1306,12 @@ void Project_Hamiltonian(SPARC_OBJ *pSPARC, int *DMVertices, double *Y,
         );
     }
     #ifdef DEBUG
+    MPI_Barrier(comm); // for 1st SCF long time debug
     t2 = MPI_Wtime();
     if(!rank && spn_i == 0) 
         printf("rank = %2d, Psi'*Psi in block cyclic format in each blacscomm took %.3f ms\n", 
                 rank, (t2 - t1)*1e3); 
+    MPI_Barrier(comm); // for 1st SCF long time debug
     t1 = MPI_Wtime();
     #endif
     
@@ -1278,6 +1322,7 @@ void Project_Hamiltonian(SPARC_OBJ *pSPARC, int *DMVertices, double *Y,
     }
     
     #ifdef DEBUG
+    MPI_Barrier(comm); // for 1st SCF long time debug
     t2 = MPI_Wtime();
     t4 = MPI_Wtime();
     if(!rank && spn_i == 0) printf("rank = %2d, Allreduce to sum Psi'*Psi over dmcomm took %.3f ms\n", 
@@ -1290,6 +1335,7 @@ void Project_Hamiltonian(SPARC_OBJ *pSPARC, int *DMVertices, double *Y,
     // first find HY
     double *HY_BLCYC;
     #ifdef DEBUG
+    MPI_Barrier(comm); // for 1st SCF long time debug
     t1 = MPI_Wtime();
     #endif
     // save HY in Xorb
@@ -1300,8 +1346,10 @@ void Project_Hamiltonian(SPARC_OBJ *pSPARC, int *DMVertices, double *Y,
     );
 
     #ifdef DEBUG
+    MPI_Barrier(comm); // for 1st SCF long time debug
     t2 = MPI_Wtime();
     if(!rank && spn_i == 0) printf("rank = %2d, finding HY took %.3f ms\n", rank, (t2 - t1)*1e3);   
+    MPI_Barrier(comm); // for 1st SCF long time debug
     t1 = MPI_Wtime();
     #endif
     
@@ -1315,9 +1363,11 @@ void Project_Hamiltonian(SPARC_OBJ *pSPARC, int *DMVertices, double *Y,
         HY_BLCYC = pSPARC->Xorb + spn_i*size_s;
     }
     #ifdef DEBUG
+    MPI_Barrier(comm); // for 1st SCF long time debug
     t2 = MPI_Wtime();
     if(!rank && spn_i == 0) printf("rank = %2d, distributing HY into block cyclic form took %.3f ms\n", 
                      rank, (t2 - t1)*1e3);  
+    MPI_Barrier(comm); // for 1st SCF long time debug
     t1 = MPI_Wtime();
     #endif
     
@@ -1344,6 +1394,7 @@ void Project_Hamiltonian(SPARC_OBJ *pSPARC, int *DMVertices, double *Y,
     }
     
     #ifdef DEBUG
+    MPI_Barrier(comm); // for 1st SCF long time debug
     t2 = MPI_Wtime();
     if(!rank && spn_i == 0) printf("rank = %2d, finding Y'*HY took %.3f ms\n",rank,(t2-t1)*1e3); 
     #endif
@@ -1352,6 +1403,7 @@ void Project_Hamiltonian(SPARC_OBJ *pSPARC, int *DMVertices, double *Y,
     }
     
     #ifdef DEBUG
+    MPI_Barrier(comm); // for 1st SCF long time debug
     et = MPI_Wtime();
     if (rank == 0 && spn_i == 0) printf("Rank 0, Project_Hamiltonian used %.3lf ms\n", 1000.0 * (et - st)); 
     #endif
