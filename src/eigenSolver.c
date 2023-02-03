@@ -684,11 +684,11 @@ void ChebyshevFiltering(
     cumStep2Hamil *= 1e3;
     double bandComm_cumStep2Hamil, generalCumStep2Hamil;
     // MPI_Reduce(&cumStep2Hamil, &bandComm_cumStep2Hamil, 1, MPI_DOUBLE, MPI_MAX, 0, pSPARC->bandcomm);
-    MPI_Reduce(&bandComm_cumStep2Hamil, &generalCumStep2Hamil, 1, MPI_DOUBLE, MPI_MAX, 0, pSPARC->blacscomm);
+    MPI_Reduce(&cumStep2Hamil, &generalCumStep2Hamil, 1, MPI_DOUBLE, MPI_MAX, 0, pSPARC->blacscomm);
     cumStep2For *= 1e3;
     double bandComm_cumStep2For, generalCumStep2For;
     // MPI_Reduce(&cumStep2For, &bandComm_cumStep2For, 1, MPI_DOUBLE, MPI_MAX, 0, pSPARC->bandcomm);
-    MPI_Reduce(&bandComm_cumStep2For, &generalCumStep2For, 1, MPI_DOUBLE, MPI_MAX, 0, pSPARC->blacscomm);
+    MPI_Reduce(&cumStep2For, &generalCumStep2For, 1, MPI_DOUBLE, MPI_MAX, 0, pSPARC->blacscomm);
     double timeStep2_2 = MPI_Wtime();
     double timeStep2 = (timeStep2_2 - timeStep2_1) * 1e3;
     double generalTimeStep2 = 0.0;
