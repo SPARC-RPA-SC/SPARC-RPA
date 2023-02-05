@@ -655,7 +655,7 @@ void ChebyshevFiltering(
         MPI_Barrier(comm);
         t1 = MPI_Wtime();
         // Ynew = (H - c*I)Y
-        Hamiltonian_vectors_mult(
+        Hamiltonian_vectors_mult_filteringBug(
             pSPARC, DMnd, DMVertices, pSPARC->Veff_loc_dmcomm + sg * pSPARC->Nd_d_dmcomm, 
             pSPARC->Atom_Influence_nloc, pSPARC->nlocProj, ncol, -c, Y, Ynew, spn_i, comm
         );

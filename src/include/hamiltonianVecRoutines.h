@@ -31,7 +31,16 @@ void Hamiltonian_vectors_mult(const SPARC_OBJ *pSPARC, int DMnd, int *DMVertices
                               ATOM_NLOC_INFLUENCE_OBJ *Atom_Influence_nloc, NLOC_PROJ_OBJ *nlocProj, 
                               int ncol, double c, double *x, double *Hx, int spin, MPI_Comm comm);
 
-
+/**
+ * @brief   Calculate (Hamiltonian + c * I) times a bunch of vectors in a matrix-free way.
+ *          
+ *          This function simply calls the Hamiltonian_vec_mult multiple times. For some
+ *          reason it is more efficient than calling it ones and do the multiplication 
+ *          together. TODO: think of a more efficient way!
+ */
+void Hamiltonian_vectors_mult_filteringBug(const SPARC_OBJ *pSPARC, int DMnd, int *DMVertices, double *Veff_loc,
+                              ATOM_NLOC_INFLUENCE_OBJ *Atom_Influence_nloc, NLOC_PROJ_OBJ *nlocProj, 
+                              int ncol, double c, double *x, double *Hx, int spin, MPI_Comm comm);
 
 /**
  * @brief   Calculate (Hamiltonian + c * I) times vectors in a matrix-free way ON A SINGLE PROCESS.
