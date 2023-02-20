@@ -81,9 +81,13 @@ not directly rely on parameters in SPARC
 */
 
 // called in initialization
-void vdWDF_generate_kernel(char *filename) { // let the function unrelated to pSPARC
+void vdWDF_generate_kernel(char *filename, MPI_Comm dmcomm_phi) { // let the function unrelated to pSPARC
     printf("begin generating kernel and 2nd derivative of spline functions.\n");
     // generate the needed files into the current test folder
+    int rank;
+    MPI_Comm_rank(dmcomm_phi, &rank);
+    int size;
+    MPI_Comm_size(dmcomm_phi, &size);
     double t1,t2;
     t1 = MPI_Wtime();
     // Initialization, set parameters and grids of model kernel functions
@@ -101,62 +105,120 @@ void vdWDF_generate_kernel(char *filename) { // let the function unrelated to pS
     3.016440085356680, 3.576529545442460 , 4.232271035198720 , 5.0};
     double*qmeshPointer = qmesh;
     int numberKernel = nqs*(nqs - 1)/2 + nqs;
-    double **vdWDFkernelPhi = (double**)malloc(sizeof(double*)*numberKernel); // kernal Phi, index 0, reciprocal
-    double **vdWDFd2Phidk2 = (double**)malloc(sizeof(double*)*numberKernel); // 2nd derivative of kernals
-    double **vdWDFd2Splineydx2 = (double**)malloc((sizeof(double*)*nqs)); // 2nd derivative of spline function at qmesh points
-    int q1, q2, qpair;
-    for (q1 = 0; q1 < nqs; q1++) {
-        for (q2 = 0; q2 < q1 + 1; q2++) { // q2 is smaller than q1
-            qpair = kernel_label(q1, q2, nqs);
-            vdWDFkernelPhi[qpair] = (double*)calloc((1 + nrpoints), sizeof(double));
-            vdWDFd2Phidk2[qpair] = (double*)calloc((1 + nrpoints), sizeof(double));
+    // Set parallelization of kernel generation process, including all q1 and q2 pairs the processor needs to generate
+    int numberMyKernel, res, myStartKernel, nextStartKernel; // a processor needs to produce [myStartKernel, nextStartKernel)
+    if (numberKernel > size) {
+        numberMyKernel = numberKernel / size;
+        myStartKernel = numberMyKernel * rank;
+        res = numberKernel % size;
+        if (rank < res) {
+            numberMyKernel += 1;
+            myStartKernel += rank;
         }
-        vdWDFd2Splineydx2[q1] = (double*)calloc(nqs, sizeof(double));
+        else {
+            myStartKernel += res;
+        }
     }
-    // Generate Wab(a, b) function
-    int nIntegratePoints = 256; // Number of imagine frequency points integrated for building kernel
-    double aMin = 0.0; double aMax = 64.0; // scope of integration of imagine frequency (a, b)
-    double *aPoints = (double*)malloc(sizeof(double)*nIntegratePoints); // imagine frequency points
-    double *aPoints2 = (double*)malloc(sizeof(double)*nIntegratePoints); // imagine frequency points
-    double *weights = (double*)malloc(sizeof(double)*nIntegratePoints);
-    int intpoint;
+    else {
+        numberMyKernel = (rank < numberKernel)?1:0;
+        myStartKernel = (rank < numberKernel)?rank:0;
+    }
+    int amountProcessors = (numberKernel > size)?size:numberKernel;
 
-    prepare_Gauss_quad(nIntegratePoints, aMin, aMax, aPoints, aPoints2, weights); // Gaussian quadrature integration points and weights
-    double sin_a[256]; double cos_a[256];
-    for (intpoint = 0; intpoint < nIntegratePoints; intpoint++) {
-        aPoints[intpoint] = tan(aPoints[intpoint]);
-        aPoints2[intpoint] = aPoints[intpoint]*aPoints[intpoint];
-        weights[intpoint] = weights[intpoint]*(1.0 + aPoints2[intpoint]);
-        sin_a[intpoint] = sin(aPoints[intpoint]);
-        cos_a[intpoint] = cos(aPoints[intpoint]);
-    }
-    double **WabMatrix = (double **)malloc(sizeof(double*)*nIntegratePoints);
-    int intpointa, intpointb;
-    for (intpointa = 0; intpointa < nIntegratePoints; intpointa++) {
-        WabMatrix[intpointa] = (double *)malloc(sizeof(double)*nIntegratePoints);
-    }
-    for (intpointa = 0; intpointa < nIntegratePoints; intpointa++) {
-        for (intpointb = 0; intpointb < nIntegratePoints; intpointb++) {
-            double coef1 = 2.0*weights[intpointa]*weights[intpointb];
-            double part1 = (3.0 - aPoints2[intpointa])*aPoints[intpointb]*sin_a[intpointa]*cos_a[intpointb] + 
-                (3.0 - aPoints2[intpointb])*aPoints[intpointa]*cos_a[intpointa]*sin_a[intpointb];
-            double part2 = (aPoints2[intpointa] + aPoints2[intpointb] - 3.0)*sin_a[intpointa]*sin_a[intpointb];
-            double part3 = 3.0 * aPoints[intpointa]*aPoints[intpointb]*cos_a[intpointa]*cos_a[intpointb];
-            double coef2 = aPoints[intpointa]*aPoints[intpointb];
-            WabMatrix[intpointa][intpointb] = coef1*(part1 + part2 - part3)/coef2;
+    double **vdWDFkernelPhi;
+    double **vdWDFd2Phidk2;
+    int *myStartEndq2;
+    int myq1, myq2, localq1; 
+    int cumulateNumberArray[20] = {1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 66, 78, 91, 105, 120, 136, 153, 171, 190, 210};
+    int myStartq1 = 0;
+    int myEndq1 = 0;
+    int q1, q2, qpair, localqpair;
+    int nIntegratePoints = 256; // Number of imagine frequency points integrated for building kernel
+    if (numberMyKernel) { // these processors will join kernel generation
+        nextStartKernel = myStartKernel + numberMyKernel;
+        for (myq1 = 0; myq1 < 20; myq1++) { // for every processor, the q1 it needs to handle is [myStartq1, myEndq1]; q1 starts from 0
+            if (myStartKernel >= cumulateNumberArray[myq1]) myStartq1++;
+            if (nextStartKernel > cumulateNumberArray[myq1]) myEndq1++;
         }
-    }
-    // Compute kernal function Phi in reciprocal space
-    double *realKernel = (double*)malloc(sizeof(double)*nrpoints);
-    for (q1 = 0; q1 < nqs; q1++) {
-        for (q2 = 0; q2 < q1 + 1; q2++) {
-            qpair = kernel_label(q1, q2, nqs);
-            printf("generating kernel: q1 %d q2 %d, qpair %d\n", q1, q2, qpair);
-            phi_value(nrpoints, nIntegratePoints, WabMatrix, aPoints, aPoints2, qmesh[q1], qmesh[q2], vdWdr, realKernel); //model kernel functions in real space
-            radial_FT(realKernel, nrpoints, vdWdr, vdWdk, vdWDFkernelPhi[qpair]); // transform the function to reciprocal space for future use
-            d2_of_kernel(vdWDFkernelPhi[qpair], nrpoints, vdWdk, vdWDFd2Phidk2[qpair]); // compute 2nd order derivative of kernel function for spline interpolation
+        myStartEndq2 = (int*)malloc(sizeof(int)*(myEndq1 + 1 - myStartq1) * 2);
+        for (myq1 = myStartq1; myq1 < myEndq1 + 1; myq1++) { // for every q1, the corresponding q2 is [startq2, endq2]; q2 starts from 0
+            localq1 = myq1 - myStartq1;
+            if (myq1 == myStartq1) {
+                myStartEndq2[localq1*2] = (myStartq1 == 0)?0:(myStartKernel - cumulateNumberArray[myStartq1 - 1]);
+                myStartEndq2[localq1*2 + 1] = myq1;
+            }
+            else if (myq1 == myEndq1) {
+                myStartEndq2[localq1*2] = 0;
+                myStartEndq2[localq1*2 + 1] = nextStartKernel - 1 - cumulateNumberArray[myEndq1 - 1];
+            }
+            else {
+                myStartEndq2[localq1*2] = 0;
+                myStartEndq2[localq1*2 + 1] = myq1;
+            }
         }
+        // generate kernels locally
+        vdWDFkernelPhi = (double**)malloc(sizeof(double*)*numberMyKernel); // kernal Phi, index 0, reciprocal
+        vdWDFd2Phidk2 = (double**)malloc(sizeof(double*)*numberMyKernel); // 2nd derivative of kernals
+
+        for (localqpair = 0; localqpair < numberMyKernel; localqpair++) {
+            vdWDFkernelPhi[localqpair] = (double*)calloc((1 + nrpoints), sizeof(double));
+            vdWDFd2Phidk2[localqpair] = (double*)calloc((1 + nrpoints), sizeof(double));
+        }
+        // Generate Wab(a, b) function
+        double aMin = 0.0; double aMax = 64.0; // scope of integration of imagine frequency (a, b)
+        double *aPoints = (double*)malloc(sizeof(double)*nIntegratePoints); // imagine frequency points
+        double *aPoints2 = (double*)malloc(sizeof(double)*nIntegratePoints); // imagine frequency points
+        double *weights = (double*)malloc(sizeof(double)*nIntegratePoints);
+        int intpoint;
+
+        prepare_Gauss_quad(nIntegratePoints, aMin, aMax, aPoints, aPoints2, weights); // Gaussian quadrature integration points and weights
+        double sin_a[256]; double cos_a[256];
+        for (intpoint = 0; intpoint < nIntegratePoints; intpoint++) {
+            aPoints[intpoint] = tan(aPoints[intpoint]);
+            aPoints2[intpoint] = aPoints[intpoint]*aPoints[intpoint];
+            weights[intpoint] = weights[intpoint]*(1.0 + aPoints2[intpoint]);
+            sin_a[intpoint] = sin(aPoints[intpoint]);
+            cos_a[intpoint] = cos(aPoints[intpoint]);
+        }
+        double **WabMatrix = (double **)malloc(sizeof(double*)*nIntegratePoints);
+        int intpointa, intpointb;
+        for (intpointa = 0; intpointa < nIntegratePoints; intpointa++) {
+            WabMatrix[intpointa] = (double *)malloc(sizeof(double)*nIntegratePoints);
+        }
+        for (intpointa = 0; intpointa < nIntegratePoints; intpointa++) {
+            for (intpointb = 0; intpointb < nIntegratePoints; intpointb++) {
+                double coef1 = 2.0*weights[intpointa]*weights[intpointb];
+                double part1 = (3.0 - aPoints2[intpointa])*aPoints[intpointb]*sin_a[intpointa]*cos_a[intpointb] + 
+                    (3.0 - aPoints2[intpointb])*aPoints[intpointa]*cos_a[intpointa]*sin_a[intpointb];
+                double part2 = (aPoints2[intpointa] + aPoints2[intpointb] - 3.0)*sin_a[intpointa]*sin_a[intpointb];
+                double part3 = 3.0 * aPoints[intpointa]*aPoints[intpointb]*cos_a[intpointa]*cos_a[intpointb];
+                double coef2 = aPoints[intpointa]*aPoints[intpointb];
+                WabMatrix[intpointa][intpointb] = coef1*(part1 + part2 - part3)/coef2;
+            }
+        }
+        // Compute kernal function Phi in reciprocal space
+        double *realKernel = (double*)malloc(sizeof(double)*nrpoints);
+        for (myq1 = myStartq1; myq1 < myEndq1 + 1; myq1++) {
+            localq1 = myq1 - myStartq1;
+            for (myq2 = myStartEndq2[localq1*2]; myq2 < myStartEndq2[localq1*2 + 1] + 1; myq2++) {
+                qpair = kernel_label(myq1, myq2, nqs);
+                // printf("generating kernel: q1 %d q2 %d, qpair %d\n", q1, q2, qpair);
+                localqpair = qpair - myStartKernel;
+                phi_value(nrpoints, nIntegratePoints, WabMatrix, aPoints, aPoints2, qmesh[myq1], qmesh[myq2], vdWdr, realKernel); //model kernel functions in real space
+                radial_FT(realKernel, nrpoints, vdWdr, vdWdk, vdWDFkernelPhi[localqpair]); // transform the function to reciprocal space for future use
+                d2_of_kernel(vdWDFkernelPhi[localqpair], nrpoints, vdWdk, vdWDFd2Phidk2[localqpair]); // compute 2nd order derivative of kernel function for spline interpolation
+            }
+        }
+        free(realKernel);
+        free(aPoints);
+        free(aPoints2);
+        free(weights);
+        for (intpointa = 0; intpointa < nIntegratePoints; intpointa++) {
+            free(WabMatrix[intpointa]);
+        }
+        free(WabMatrix);
     }
+
     // print computed kernel and 2nd derivative of kernel
     char folderRoute[L_STRING];
     strncpy(folderRoute, filename,sizeof(folderRoute));
@@ -172,38 +234,49 @@ void vdWDF_generate_kernel(char *filename) { // let the function unrelated to pS
     char kernelFileRoute[L_STRING]; // name of the file of the output kernels and 2nd derivative of kernels
     snprintf(kernelFileRoute,       L_STRING, "%skernel_d2.txt"  ,     folderRoute);
 
-    print_kernel(kernelFileRoute, vdWDFkernelPhi, vdWDFd2Phidk2, nrpoints, nqs);
+    if (!rank) { // create or clean the file
+        FILE *outputFile = NULL;
+        outputFile = fopen(kernelFileRoute,"w");
+        fclose(outputFile);
+    }
+        
+    int globalRank;
+    for (globalRank = 0; globalRank < amountProcessors; globalRank++) {
+        MPI_Barrier(dmcomm_phi);
+        if (globalRank == rank)
+            local_print_kernel(kernelFileRoute, vdWDFkernelPhi, vdWDFd2Phidk2, nrpoints, myStartq1, myEndq1, myStartEndq2);
+    }
 
-    // Compute the 2nd derivative of spline function at qmesh points, then print them. Used in spline interpolation
-    spline_d2_qmesh(qmeshPointer, nqs, vdWDFd2Splineydx2);
-    // char *d2splineFileRoute = "spline_d2.txt"; //name of the file of the 2nd derivatives of spline functions
-    char d2splineFileRoute[L_STRING]; //name of the file of the 2nd derivatives of spline functions
-    snprintf(d2splineFileRoute,       L_STRING, "%sspline_d2.txt"  ,     folderRoute);
-    print_d2ydx2(d2splineFileRoute, nqs, vdWDFd2Splineydx2);
+    // Compute the 2nd derivative of spline function at qmesh points, then print them. Used in spline interpolation. There is no parallelization
+    if (rank == 0) {
+        double **vdWDFd2Splineydx2 = (double**)malloc((sizeof(double*)*nqs)); // 2nd derivative of spline function at qmesh points
+        for (q1 = 0; q1 < nqs; q1++) {
+            vdWDFd2Splineydx2[q1] = (double*)calloc(nqs, sizeof(double));
+        }
+        spline_d2_qmesh(qmeshPointer, nqs, vdWDFd2Splineydx2);
+        // char *d2splineFileRoute = "spline_d2.txt"; //name of the file of the 2nd derivatives of spline functions
+        char d2splineFileRoute[L_STRING]; //name of the file of the 2nd derivatives of spline functions
+        snprintf(d2splineFileRoute,       L_STRING, "%sspline_d2.txt"  ,     folderRoute);
+        print_d2ydx2(d2splineFileRoute, nqs, vdWDFd2Splineydx2);
+        for (q1 = 0; q1 < nqs; q1++) {
+            free(vdWDFd2Splineydx2[q1]);
+        }
+        free(vdWDFd2Splineydx2);
+    }
 
+    MPI_Barrier(dmcomm_phi);
     t2 = MPI_Wtime();
-    printf("end of generating kernel function and 2nd derivative of spline functions.\n");
-    printf("Generation spent %.3f s\n", t2 - t1);
-
-    for (qpair = 0; qpair < numberKernel; qpair++) {
-        free(vdWDFkernelPhi[qpair]);
-        free(vdWDFd2Phidk2[qpair]);
+    
+    if (!rank) printf("end of generating kernel function and 2nd derivative of spline functions. Generation spent %.3f s\n", t2 - t1);
+    if (numberMyKernel) {
+        free(myStartEndq2);
+        for (qpair = 0; qpair < numberMyKernel; qpair++) {
+            free(vdWDFkernelPhi[qpair]);
+            free(vdWDFd2Phidk2[qpair]);
+        }
+        free(vdWDFkernelPhi);
+        free(vdWDFd2Phidk2);
     }
-    for (q1 = 0; q1 < nqs; q1++) {
-        free(vdWDFd2Splineydx2[q1]);
-    }
-    free(realKernel);
-    free(vdWDFkernelPhi);
-    free(vdWDFd2Phidk2);
-    free(vdWDFd2Splineydx2);
-
-    free(aPoints);
-    free(aPoints2);
-    free(weights);
-    for (intpointa = 0; intpointa < nIntegratePoints; intpointa++) {
-        free(WabMatrix[intpointa]);
-    }
-    free(WabMatrix);
 
 }
 
@@ -354,22 +427,25 @@ void spline_d2_qmesh(double* qmesh, int nqs, double** d2ydx2) { // initialize_sp
 }
 
 // Print model kernel functions (vdWDFkernelPhi) and their 2nd derivatives (vdWDFd2Phidk2)
-void print_kernel(char* outputName, double **vdWDFkernelPhi, double ** vdWDFd2Phidk2, int nrpoints, int nqs) {
+void local_print_kernel(char* outputName, double **vdWDFkernelPhi, double ** vdWDFd2Phidk2, int nrpoints, 
+    int myStartq1, int myEndq1, int* myStartEndq2) {
     FILE *outputFile = NULL;
-    outputFile = fopen(outputName,"w");
-    int q1, q2, index, kernelLabel;
-    for (q1 = 0; q1 < nqs; q1++) {
-        for (q2 = 0; q2 <= q1; q2++) {
-            fprintf(outputFile, "first q %d, second q %d\n", q1, q2);
-            kernelLabel = kernel_label(q1, q2, 20);
+    outputFile = fopen(outputName,"a");
+    int myq1, localq1, myq2, index, localqpair;
+    localqpair = 0;
+    for (myq1 = myStartq1; myq1 < myEndq1 + 1; myq1++) {
+        localq1 = myq1 - myStartq1;
+        for (myq2 = myStartEndq2[localq1*2]; myq2 < myStartEndq2[localq1*2 + 1] + 1; myq2++) {
+            fprintf(outputFile, "first q %d, second q %d\n", myq1, myq2);
             fprintf(outputFile, "Kernel function\n");
             for (index = 0; index < nrpoints + 1; index++) {
-                fprintf(outputFile, "%5d %12.9f\n", index, vdWDFkernelPhi[kernelLabel][index]);
+                fprintf(outputFile, "%5d %12.9f\n", index, vdWDFkernelPhi[localqpair][index]);
             }
             fprintf(outputFile, "2nd derivative of Kernel function\n");
             for (index = 0; index < nrpoints + 1; index++) {
-                fprintf(outputFile, "%5d %12.9f\n", index, vdWDFd2Phidk2[kernelLabel][index]);
+                fprintf(outputFile, "%5d %12.9f\n", index, vdWDFd2Phidk2[localqpair][index]);
             }
+            localqpair++;
         }
     }
     fclose(outputFile);

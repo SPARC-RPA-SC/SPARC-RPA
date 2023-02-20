@@ -336,8 +336,8 @@ void Initialize(SPARC_OBJ *pSPARC, int argc, char *argv[]) {
 
     // initialize vdW-DF
     if (pSPARC->vdWDFFlag != 0) {
-        if ((pSPARC->vdWDFKernelGenFlag) && (rank == 0)) {
-            vdWDF_generate_kernel(pSPARC->filename); // if there is no file of kernel function and d2Spline, then generate one
+        if (pSPARC->vdWDFKernelGenFlag) {
+            vdWDF_generate_kernel(pSPARC->filename, pSPARC->dmcomm_phi); // if there is no file of kernel function and d2Spline, then generate one
         }
         MPI_Barrier(MPI_COMM_WORLD);
         vdWDF_initial_read_kernel(pSPARC); // read kernel function and 2nd derivative of spline functions

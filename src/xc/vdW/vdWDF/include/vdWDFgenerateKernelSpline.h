@@ -24,7 +24,7 @@
  * @brief generate kernel functions, their 2nd derivatives and 2nd derivative of spline functions
  * The function does not have input variables
  */
-void vdWDF_generate_kernel(char *filename);
+void vdWDF_generate_kernel(char *filename, MPI_Comm dmcomm_phi);
 
 /**
  * @brief find suitable Gaussian quadrature integration points and weights
@@ -78,7 +78,8 @@ void spline_d2_qmesh(double* qmeshPointer, int nqs, double** d2ydx2);
  * @param outputName: name of the file of the output kernels and 2nd derivative of kernels
  * @param nqs: the total number of model energy ratios q
  */
-void print_kernel(char* outputName, double **vdWDFkernelPhi, double ** vdWDFd2Phidk2, int nrpoints, int nqs);
+void local_print_kernel(char* outputName, double **vdWDFkernelPhi, double ** vdWDFd2Phidk2, int nrpoints, 
+    int myStartq1, int myEndq1, int* myStartEndq2);
 
 /**
  * @brief Print 2nd derivatives of spline functions (vdWDFd2Splineydx2)
