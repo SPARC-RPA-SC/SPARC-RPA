@@ -1,0 +1,1 @@
+void print_result(RPA_OBJ *pRPA);
