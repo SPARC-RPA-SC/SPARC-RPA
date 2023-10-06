@@ -11,11 +11,13 @@
  /*
  Structure of RPA program
  main
- ├──initialization
+ ├──initialization_RPA
  |  ├──readInput
  |  ├──generateReducedKgrid
  |  ├──parallelization
  |  └──omegaMeshWeight
+ ├──read_scf
+ ├──prepare_Hamiltonian
  ├──chebyshevFiltering 
  |  ├──(if PDEP method is used) 
  |  |  nuChi0MultiplyDeltaV 
@@ -61,7 +63,9 @@ int main(int argc, char *argv[]) {
 
     read_scf(&SPARC);
 
-    chebyshev_filtering(&SPARC, &RPA);
+    // prepare_Hamiltonian(&SPARC, &RPA); // for generating Veff and Vnl by SPARC, then transferring to RPA
+
+    chebyshev_filtering(&RPA);
 
     print_result(&RPA);
 

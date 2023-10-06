@@ -101,7 +101,7 @@ SPARC_OBJSC = ../../src/initialization.o ../../src/readfiles.o ../../src/atomdat
         ../../src/cyclix/cyclix_tools.o ../../src/cyclix/cyclix_forces.o ../../src/cyclix/cyclix_gradVec.o ../../src/cyclix/cyclix_lapVec.o \
         ../../src/cyclix/cyclix_stress.o 
 
-OBJSC = main.o initialization_RPA.o readScf.o chebyshevFiltering.o \
+OBJSC = main.o initialization_RPA.o parallelization_RPA.o readScf.o chebyshevFiltering.o \
 	printResult.o finalization_RPA.o
 
 LIBBASE = ../lib/rpacalc

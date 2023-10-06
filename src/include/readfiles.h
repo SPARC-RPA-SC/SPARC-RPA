@@ -73,7 +73,7 @@ double* readDens_cube(char *filename, int dens_gridsizes[3], double dens_latvecs
  */
 double* read_vec_cube(SPARC_OBJ *pSPARC, char *filename);
 
-
+int readStringInputsFromFile(FILE *input_fp, const int max_nstr, char inputArgv[][L_STRING]);
 #endif // READFILES_H
 
 

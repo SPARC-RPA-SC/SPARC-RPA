@@ -7,5 +7,5 @@
 #include "readScf.h"
 
 void read_scf(SPARC_OBJ* pSPARC) {
-
+    
 }
