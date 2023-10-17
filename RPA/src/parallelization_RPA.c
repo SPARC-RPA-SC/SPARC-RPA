@@ -18,32 +18,10 @@
 #include "parallelization.h"
 
 void Setup_Comms_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA) {
-    // phi domain communicator, or the communicator of the whole space, reuse pSPARC->dmcomm_phi
-    // to compute Vxc (exact exchange?)
-    // spin communicator and spin-bridge communicator also reuse pSPARC->spincomm and pSPARC->spin_bridge_comm
-    // to compute Vxc with spin
-    // kpt communicator should be composed in pRPA, decomposed from spin communicator
-    // how to transfer psi (and potential, if necessary) from pSPARC to pRPA?
-    // qpt-bridge communicator, which connects processors for the same qpt in different kpt comms, also decomposed from spin comm
-    // to reduce Erpa(q)
-    // qpt communicator decomposed from kpt communicator
-    // to compute Hamiltonian
-    // band communicator decomposed from every (kpt, qpt) unit, the relatively high level is for receiving psi from pSPARC->bandcomm 
-    // to generate RHS of Sternheimer equation
-    // omega communicator decomposed from every omega operator??
-    // to add i\omega LHS of Sternheimer equation
-    // domain communicator decomposed from every omega communicator
-    // to decompose every single equation
-
-    // if the system is only gamma point:
-    // phi domain communicator, or the communicator of the whole space, reuse pSPARC->dmcomm_phi
-    // to compute Vxc (exact exchange?)
-    // spin communicator and spin-bridge communicator also reuse pSPARC->spincomm and pSPARC->spin_bridge_comm
-    // to compute Vxc with spin
-    // band communicator decomposed from every (kpt, qpt) unit, reuse pSPARC->bandcomm 
-    // to generate RHS of Sternheimer equation
-    // omega communicator decomposed from every omega operator??
-    // to add i\omega LHS of Sternheimer equation
-    // domain communicator decomposed from every omega communicator
-    // to decompose every single equation
+    // The Sternheimer equation will be solved in pSPARC. pRPA is the structure saving variables not in pSPARC.
+    // After wavefunctions \psi in reduced kpt grid are read by using the initialized pSPARC,
+    // the communicators in pSPARC will be totally rebuilt.
+    // every spin communicator in pSPARC->spincomm in RPA is for dividing pairs of (spin, omega), pSPARC->Nspin = spin number * omega number
+    // every kpt communicator in pSPARC->kptcomm in RPA is for dividing pairs of (k-point, q-point), pSPARC->Nkpts = all kpt number * Nkpt_sym
+    // then go to band and domain dividence.
 }

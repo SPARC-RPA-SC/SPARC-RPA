@@ -51,6 +51,10 @@ void print_orbital_complex(
     char *fname, int spin_index, int kpt_index, double *kpt_vec, int band_index, MPI_Comm comm
 );
 
+void write_orbitals_distributed(SPARC_OBJ *pSPARC);
+
+void read_orbitals_distributed(SPARC_OBJ *pSPARC);
+
 /**
  * @brief   Print Energy density
  */

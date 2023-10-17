@@ -311,6 +311,8 @@ void Calculate_electronicGroundState(SPARC_OBJ *pSPARC) {
         t1 = MPI_Wtime();
         #endif
         print_orbitals(pSPARC);
+        write_orbitals_distributed(pSPARC);
+        // read_orbitals_distributed(pSPARC);
         #ifdef DEBUG
         t2 = MPI_Wtime();
         if (rank == 0) printf("Time for printing orbitals: %.3f ms\n", (t2-t1)*1e3);

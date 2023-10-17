@@ -116,7 +116,7 @@ all: rpacalc
 # 	$(CC) -c $(CFLAGS) $(CPPFLAGS) $< -o $@
 
 rpacalc: $(OBJSC)
-	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJS) $(SPARC_OBJSC) -o $(LIBBASE) $^ $(LDLIBS)
+	$(CC) $(CFLAGS) $(LDFLAGS) $(SPARC_OBJSC) -o $(LIBBASE) $^ $(LDLIBS)
 
 .PHONY: clean
 clean:
