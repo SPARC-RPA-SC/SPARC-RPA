@@ -14,6 +14,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/stat.h>
 #include <string.h>
 #include <math.h>
 #include <mpi.h>
@@ -2563,6 +2564,15 @@ void SPARC_copy_input(SPARC_OBJ *pSPARC, SPARC_INPUT_OBJ *pSPARC_Input) {
         pSPARC->PrintPsiFlag[1] = 0; pSPARC->PrintPsiFlag[2] = pSPARC->Nspin-1;     // spin start/end index
         pSPARC->PrintPsiFlag[3] = 0; pSPARC->PrintPsiFlag[4] = pSPARC->Nkpts-1;     // k-point start/end index
         pSPARC->PrintPsiFlag[5] = 0; pSPARC->PrintPsiFlag[6] = pSPARC->Nstates-1;   // band start/end index
+        if (!rank) {
+            const char* orbitalFolderName = "orbitals";
+            if (mkdir(orbitalFolderName, 0777) == 0) {
+                printf("Orbital folder '%s' created!\n", orbitalFolderName);
+            } else {
+                printf("Failed to create orbital folder %s! Maybe there is such folder.\n", orbitalFolderName);
+            }
+        }
+        MPI_Barrier(MPI_COMM_WORLD);
     }
 
     // check MDMeth availability

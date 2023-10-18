@@ -786,7 +786,7 @@ void write_orbitals_distributed_real(SPARC_OBJ *pSPARC, int band, int spin, MPI_
     int localSpin = spin - pSPARC->spin_start_indx;
     int localBand = band - pSPARC->band_start_indx;
     int DMndsp = pSPARC->Nd_d_dmcomm * pSPARC->Nspinor_spincomm;
-    snprintf(orbitalFileName, 100, "band%d_spin%d.orbit", band, spin);
+    snprintf(orbitalFileName, 100, "orbitals/band%d_spin%d.orbit", band, spin);
     printf("the name of the orbital file is %s\n", orbitalFileName);
     MPI_File_open(pSPARC->dmcomm, orbitalFileName, MPI_MODE_CREATE|MPI_MODE_RDWR, MPI_INFO_NULL, &orbitalFh);
     MPI_File_set_view(orbitalFh, 0, MPI_DOUBLE, domainSubarray, "native", MPI_INFO_NULL);
@@ -803,7 +803,7 @@ void write_orbitals_distributed_complex(SPARC_OBJ *pSPARC, int kpt, int band, in
     int localBand = band - pSPARC->band_start_indx;
     int DMndsp = pSPARC->Nd_d_dmcomm * pSPARC->Nspinor_spincomm;
     int size_k = DMndsp * pSPARC->Nband_bandcomm;
-    snprintf(orbitalFileName, 100, "kpt_%.4f,%.4f,%.4f_band%d_spin%d.orbit", pSPARC->k1[kpt], pSPARC->k2[kpt], pSPARC->k3[kpt], band, spin);
+    snprintf(orbitalFileName, 100, "orbitals/kpt_%.4f,%.4f,%.4f_band%d_spin%d.orbit", pSPARC->k1[kpt], pSPARC->k2[kpt], pSPARC->k3[kpt], band, spin);
     printf("the name of the orbital file is %s\n", orbitalFileName);
     MPI_File_open(pSPARC->dmcomm, orbitalFileName, MPI_MODE_CREATE|MPI_MODE_RDWR, MPI_INFO_NULL, &orbitalFh);
     MPI_File_set_view(orbitalFh, 0, MPI_C_DOUBLE_COMPLEX, domainSubarray, "native", MPI_INFO_NULL);
@@ -851,7 +851,7 @@ void read_orbitals_distributed_real(SPARC_OBJ *pSPARC, int band, int spin, MPI_D
     int localSpin = spin - pSPARC->spin_start_indx;
     int localBand = band - pSPARC->band_start_indx;
     int DMndsp = pSPARC->Nd_d_dmcomm * pSPARC->Nspinor_spincomm;
-    snprintf(orbitalFileName, 100, "band%d_spin%d.orbit", band, spin);
+    snprintf(orbitalFileName, 100, "orbitals/band%d_spin%d.orbit", band, spin);
     printf("the name of the orbital file is %s\n", orbitalFileName);
     MPI_File_open(pSPARC->dmcomm, orbitalFileName, MPI_MODE_RDWR, MPI_INFO_NULL, &orbitalFh); // cannot create a file
     MPI_File_set_view(orbitalFh, 0, MPI_DOUBLE, domainSubarray, "native", MPI_INFO_NULL);
@@ -868,7 +868,7 @@ void read_orbitals_distributed_complex(SPARC_OBJ *pSPARC, int kpt, int band, int
     int localBand = band - pSPARC->band_start_indx;
     int DMndsp = pSPARC->Nd_d_dmcomm * pSPARC->Nspinor_spincomm;
     int size_k = DMndsp * pSPARC->Nband_bandcomm;
-    snprintf(orbitalFileName, 100, "kpt_%.4f,%.4f,%.4f_band%d_spin%d.orbit", pSPARC->k1[kpt], pSPARC->k2[kpt], pSPARC->k3[kpt], band, spin);
+    snprintf(orbitalFileName, 100, "orbitals/kpt_%.4f,%.4f,%.4f_band%d_spin%d.orbit", pSPARC->k1[kpt], pSPARC->k2[kpt], pSPARC->k3[kpt], band, spin);
     printf("the name of the orbital file is %s\n", orbitalFileName);
     MPI_File_open(pSPARC->dmcomm, orbitalFileName, MPI_MODE_RDWR, MPI_INFO_NULL, &orbitalFh); // cannot create a file
     MPI_File_set_view(orbitalFh, 0, MPI_C_DOUBLE_COMPLEX, domainSubarray, "native", MPI_INFO_NULL);
@@ -936,7 +936,7 @@ void read_orbitals_distributed(SPARC_OBJ *pSPARC) {
     //             for (band = 0; band < pSPARC->Nstates; band++) {
     //                 for (spin = 0; spin < pSPARC->Nspin; spin++) {
     //                     char orbitalFileName[100];
-    //                     snprintf(orbitalFileName, 100, "kpt_%.4f,%.4f,%.4f_band%d_spin%d.txt", pSPARC->k1[kpt], pSPARC->k2[kpt], pSPARC->k3[kpt], band, spin);
+    //                     snprintf(orbitalFileName, 100, "orbitals/kpt_%.4f,%.4f,%.4f_band%d_spin%d.txt", pSPARC->k1[kpt], pSPARC->k2[kpt], pSPARC->k3[kpt], band, spin);
     //                     FILE *orbitalFile = fopen(orbitalFileName, "w");
     //                     for (int index = 0; index < pSPARC->Nd; index++) {
     //                         int globalIndex = kpt*(pSPARC->Nstates*pSPARC->Nspin*pSPARC->Nd) + band*(pSPARC->Nspin*pSPARC->Nd) + spin*(pSPARC->Nd) + index;
@@ -949,43 +949,50 @@ void read_orbitals_distributed(SPARC_OBJ *pSPARC) {
     //     }
     // }
     // else {
-    //     double maxDiffReal = 0.0; double maxDiffImag = 0.0;
-    //     double minDiffReal = 0.0; double minDiffImag = 0.0;
+    //     double maxQuoReal = 0.0; double maxQuoImag = 0.0;
+    //     double minQuoReal = 0.0; double minQuoImag = 0.0;
     //     for (int index; index < len_tot; index++) {
-    //         double _Complex diff = readXorb_kpt[index] - pSPARC->Xorb_kpt[index];
-    //         double _Complex diff2 = readXorb_kpt[index] + pSPARC->Xorb_kpt[index];
-    //         if (fabs(creal(diff)) > fabs(creal(diff2)))
-    //             diff = diff2;
-    //         double diffReal = creal(diff); double diffImag = cimag(diff);
+    //         double _Complex theQuotient = pSPARC->Xorb_kpt[index] / readXorb_kpt[index];
+    //         double quotientReal = creal(theQuotient); double quotientImag = cimag(theQuotient);
     //         // if (index == 0) printf("diffReal %f\n", diffReal);
-    //         if (diffReal > maxDiffReal)
-    //             maxDiffReal = diffReal;
-    //         if (diffReal < minDiffReal)
-    //             minDiffReal = diffReal;
-    //         if (diffImag > maxDiffImag)
-    //             maxDiffImag = diffImag;
-    //         if (diffImag < minDiffImag)
-    //             minDiffImag = diffImag; 
+    //         if (quotientReal > maxQuoReal)
+    //             maxQuoReal = quotientReal;
+    //         if (quotientReal < minQuoReal)
+    //             minQuoReal = quotientReal;
+    //         if (quotientImag > maxQuoImag)
+    //             maxQuoImag = quotientImag;
+    //         if (quotientImag < minQuoImag)
+    //             minQuoImag = quotientImag; 
     //     }
-    //     printf("My rank is %d start kpt (%.4f %.4f %.4f) band (%d~%d) dmcomm (%d %d %d), the first entry is %12.9f + %12.9fi (%12.9f + %12.9fi), maxDiff is %12.9f %12.9f, minDiff is %12.9f %12.9f\n",
+    //     printf("My rank is %d start kpt (%.4f %.4f %.4f) band (%d~%d) dmcomm (%d %d %d), the first entry is %12.9f + %12.9fi (%12.9f + %12.9fi), max Quotient is %12.9f %12.9f, min Quotient is %12.9f %12.9f\n",
     //      worldRank, pSPARC->k1[pSPARC->kpt_start_indx], pSPARC->k2[pSPARC->kpt_start_indx], pSPARC->k3[pSPARC->kpt_start_indx], 
-    //      pSPARC->band_start_indx, pSPARC->band_end_indx, coord_dmcomm[0], coord_dmcomm[1], coord_dmcomm[2], creal(pSPARC->Xorb_kpt[0]), cimag(pSPARC->Xorb_kpt[0]), creal(readXorb_kpt[0]), cimag(readXorb_kpt[0]), maxDiffReal, maxDiffImag, minDiffReal, minDiffImag);
+    //      pSPARC->band_start_indx, pSPARC->band_end_indx, coord_dmcomm[0], coord_dmcomm[1], coord_dmcomm[2], creal(pSPARC->Xorb_kpt[0]), cimag(pSPARC->Xorb_kpt[0]), creal(readXorb_kpt[0]), cimag(readXorb_kpt[0]), maxQuoReal, maxQuoImag, minQuoReal, minQuoImag);
     //     MPI_Barrier(pSPARC->dmcomm);
-    //     if ((worldRank % 4) == 0) {
-    //         double _Complex quotient0 = pSPARC->Xorb_kpt[0] / readXorb_kpt[0]; double _Complex quotient1 = pSPARC->Xorb_kpt[1] / readXorb_kpt[1];
-    //         double _Complex quotient2 = pSPARC->Xorb_kpt[2] / readXorb_kpt[2]; double _Complex quotient3 = pSPARC->Xorb_kpt[3] / readXorb_kpt[3];
-    //         printf("rank %d, the first 4 numbers are %12.9f + %12.9fi / (%12.9f + %12.9fi) = %12.9f + %12.9f,\n %12.9f + %12.9fi / (%12.9f + %12.9fi) = %12.9f + %12.9f,\n %12.9f + %12.9fi / (%12.9f + %12.9fi) = %12.9f + %12.9f,\n %12.9f + %12.9fi / (%12.9f + %12.9fi) = %12.9f + %12.9f,\n", worldRank,
-    //             creal(pSPARC->Xorb_kpt[0]), cimag(pSPARC->Xorb_kpt[0]), creal(readXorb_kpt[0]), cimag(readXorb_kpt[0]), creal(quotient0), cimag(quotient0),
-    //             creal(pSPARC->Xorb_kpt[1]), cimag(pSPARC->Xorb_kpt[1]), creal(readXorb_kpt[1]), cimag(readXorb_kpt[1]), creal(quotient1), cimag(quotient1),
-    //             creal(pSPARC->Xorb_kpt[2]), cimag(pSPARC->Xorb_kpt[2]), creal(readXorb_kpt[2]), cimag(readXorb_kpt[2]), creal(quotient2), cimag(quotient2),
-    //             creal(pSPARC->Xorb_kpt[3]), cimag(pSPARC->Xorb_kpt[3]), creal(readXorb_kpt[3]), cimag(readXorb_kpt[3]), creal(quotient3), cimag(quotient3));
+    //     for (kpt = pSPARC->kpt_start_indx; kpt < pSPARC->kpt_end_indx + 1; kpt++) {
+    //         for (band = pSPARC->band_start_indx; band < pSPARC->band_end_indx + 1; band++) {
+    //             for (spin = pSPARC->spin_start_indx; spin < pSPARC->spin_end_indx + 1; spin++) {
+    //                 int localSpin = spin - pSPARC->spin_start_indx;
+    //                 int localKpt = kpt - pSPARC->kpt_start_indx;
+    //                 int localBand = band - pSPARC->band_start_indx;
+    //                 int DMndsp = pSPARC->Nd_d_dmcomm * pSPARC->Nspinor_spincomm;
+    //                 int size_k = DMndsp * pSPARC->Nband_bandcomm;
+    //                 int theBandStartIndex = size_k*localKpt + DMndsp*localBand + pSPARC->Nd_d_dmcomm*localSpin;
+    //                 double _Complex quotient0 = pSPARC->Xorb_kpt[0 + theBandStartIndex] / readXorb_kpt[0 + theBandStartIndex];
+    //                 double _Complex quotient1 = pSPARC->Xorb_kpt[1 + theBandStartIndex] / readXorb_kpt[1 + theBandStartIndex];
+    //                 double _Complex quotient2 = pSPARC->Xorb_kpt[2 + theBandStartIndex] / readXorb_kpt[2 + theBandStartIndex]; 
+    //                 double _Complex quotient3 = pSPARC->Xorb_kpt[3 + theBandStartIndex] / readXorb_kpt[3 + theBandStartIndex];
+    //                 printf("global rank %d, kpt %d, band %d, spin %d, the first 4 quotient between computed orb and read orb are %12.9f + %12.9f,\n %12.9f + %12.9f,\n %12.9f + %12.9f,\n %12.9f + %12.9f,\n", worldRank, kpt, band, spin,
+    //                     creal(quotient0), cimag(quotient0), creal(quotient1), cimag(quotient1),
+    //                     creal(quotient2), cimag(quotient2), creal(quotient3), cimag(quotient3));
+    //             }
+    //         }
     //     }
     //     if (worldSize == 1) {
     //         for (kpt = 0; kpt < pSPARC->Nkpts_sym; kpt++) { // this code can only be used with one processor
     //             for (band = 0; band < pSPARC->Nstates; band++) {
     //                 for (spin = 0; spin < pSPARC->Nspin; spin++) {
     //                     char orbitalFileName[100];
-    //                     snprintf(orbitalFileName, 100, "kpt_%.4f,%.4f,%.4f_band%d_spin%d.txt", pSPARC->k1[kpt], pSPARC->k2[kpt], pSPARC->k3[kpt], band, spin);
+    //                     snprintf(orbitalFileName, 100, "orbitals/kpt_%.4f,%.4f,%.4f_band%d_spin%d.txt", pSPARC->k1[kpt], pSPARC->k2[kpt], pSPARC->k3[kpt], band, spin);
     //                     FILE *orbitalFile = fopen(orbitalFileName, "w");
     //                     for (int index = 0; index < pSPARC->Nd; index++) {
     //                         int globalIndex = kpt*(pSPARC->Nstates*pSPARC->Nspin*pSPARC->Nd) + band*(pSPARC->Nspin*pSPARC->Nd) + spin*(pSPARC->Nd) + index;
@@ -995,7 +1002,7 @@ void read_orbitals_distributed(SPARC_OBJ *pSPARC) {
     //                 }
     //             }
     //         }
-    //         char *allOrbitalFileName = "allOrbitals.txt";
+    //         char *allOrbitalFileName = "orbitals/allOrbitals.txt";
     //         FILE *orbitalFile = fopen(allOrbitalFileName, "w");
     //         fprintf(orbitalFile, "kpt num %d, band num %d, spin num %d, grid %d\n", pSPARC->Nkpts, pSPARC->Nstates, pSPARC->Nspin, pSPARC->Nd);
     //         for (int index = 0; index < len_tot; index++) {
