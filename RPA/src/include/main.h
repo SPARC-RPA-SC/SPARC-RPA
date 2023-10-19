@@ -15,21 +15,12 @@
 
 typedef struct _RPA_OBJ {
     // MPI communicators and their parallelizing parameters
-    MPI_Comm kptcomm;   // communicator for k-point calculations (LOCAL)
-    int npkpt;          // number of processes for paral. over k-points
-    MPI_Comm kptcomm_topo; // Cartesian topology set up on top of a kptcomm (LOCAL)
-    MPI_Comm kptcomm_topo_excl; // processors excluded from the Cart topo within a kptcomm (LOCAL)
-    MPI_Comm kptcomm_inter; // inter-communicator connecting the Cart topology and the rest in a kptcomm (LOCAL)
-    MPI_Comm kpt_bridge_comm; // bridging communicator that connects all processes in kptcomm that have the same rank (LOCAL)
-    MPI_Comm bandcomm;  // communicator for band calculations (LOCAL)
-    int npband;         // number of processes for paral. over bands
-    MPI_Comm omegacomm; // communicator for solving Sternheimer equations with designated omegas
+    MPI_Comm qptcomm; // Cartesian topology set up on top of a kptcomm (LOCAL)
+    int npqpt;          // number of processes for paral. over q-points, symmetry reduced k-points
+    MPI_Comm omegacomm; // communicator for designated omegas
     int npomega;
-    MPI_Comm dmcomm;    // communicator for domain decomposition (LOCAL)
-    int npNdx;          // number of processes for paral. over domain in x-dir
-    int npNdy;          // number of processes for paral. over domain in y-dir
-    int npNdz;          // number of processes for paral. over domain in z-dir
-    MPI_Comm blacscomm; // communicator for using blacs to do calculation (LOCAL)
+    MPI_Comm nuChi0Eigscomm; // communicator for dividing trial vectors, whose amount equals to number of desired eigs of nuChi0
+    int npnuChi0Neig;
     // other settings for RPA computation
     char filename[L_STRING];
     char filename_out[L_STRING]; 
@@ -42,16 +33,33 @@ typedef struct _RPA_OBJ {
     int maxitFiltering;
     int ChebDegreeRPA;
     double tol_ErpaConverge;
+    // q-points, which is k-point grid without shift after symmetry reduction
+    int nqpts_sym; // amount of q-points
+    int qpt_start_indx; // start q point index in local qptcomm (LOCAL)
+    int qpt_end_indx;   // end q point index in local qptcomm (LOCAL)
+    double *qptWts;
+    double *q1;
+    double *q2;
+    double *q3;
+    double *qptWts_loc;
+    double *q1_loc;
+    double *q2_loc;
+    double *q3_loc;
+    // omegas, which is integral points and weights from [0, +\infty]
+    int nomega;
+    int omega_start_indx;
+    int omega_end_indx;
+    double *omega;
+    double *omega01;
+    double *omegaWts;
+    double *omegaWts_loc;
 } RPA_OBJ;
 
 typedef struct _RPA_INPUT_OBJ {
     // MPI parallelizing parameters
-    int npkpt;          // number of processes for paral. over k-points
-    int npband;         // number of processes for paral. over bands
+    int npqpt;          // number of processes for paral. over k-points
     int npomega;
-    int npNdx;          // number of processes for paral. over domain in x-dir
-    int npNdy;          // number of processes for paral. over domain in y-dir
-    int npNdz;          // number of processes for paral. over domain in z-dir
+    int npnuChi0Neig;
     // other settings for RPA computation
     int nuChi0Neig;
     int Nomega;
