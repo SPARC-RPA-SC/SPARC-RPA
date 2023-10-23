@@ -1,3 +1,6 @@
+#ifndef INITIALRPA 
+#define INITIALRPA
+
 #include "isddft.h"
 
 void initialize_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int argc, char* argv[]);
@@ -16,3 +19,4 @@ void set_omegas(double *omega, double *omega01, double *omegaWts, int Nomega);
 
 void write_settings(RPA_OBJ *pRPA);
 
+#endif

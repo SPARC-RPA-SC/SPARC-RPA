@@ -171,7 +171,7 @@ void read_RPA_inputs(RPA_INPUT_OBJ *pRPA_Input) {
             fscanf(input_fp,"%d",&pRPA_Input->Nomega);
             fscanf(input_fp, "%*[^\n]\n");
         } else if (strcmpi(str,"TOL_RPA_ENERGY:") == 0) {
-            fscanf(input_fp,"%d",&pRPA_Input->tol_ErpaConverge);
+            fscanf(input_fp,"%lf",&pRPA_Input->tol_ErpaConverge);
             fscanf(input_fp, "%*[^\n]\n");
         } else if (strcmpi(str,"MAXIT_FILTERING:") == 0) {
             fscanf(input_fp,"%d",&pRPA_Input->maxitFiltering);
@@ -262,7 +262,6 @@ int set_qpoints(double *qptWts, double *q1, double *q2, double *q3, int Kx, int 
     for (nk1 = nk1_s; nk1 < nk1_e; nk1++) {
         for (nk2 = nk2_s; nk2 < nk2_e; nk2++) {
             for (nk3 = nk3_s; nk3 < nk3_e; nk3++) {
-                double k1_red, k2_red, k3_red;
                 k1_red = nk1 * 1.0/Kx;
                 k2_red = nk2 * 1.0/Ky;
                 k3_red = nk3 * 1.0/Kz;
@@ -298,9 +297,12 @@ int set_qpoints(double *qptWts, double *q1, double *q2, double *q3, int Kx, int 
         double tpiblx = 2 * M_PI / Lx;
         double tpibly = 2 * M_PI / Ly;
         double tpiblz = 2 * M_PI / Lz;
+        #ifdef DEBUG
         if (!rank) printf("q1[%2d]: %8.4f, q2[%2d]: %8.4f, q3[%2d]: %8.4f, qptwt[%2d]: %.3f \n",
             nk,q1[nk]/tpiblx,nk,q2[nk]/tpibly,nk,q3[nk]/tpiblz,nk,qptWts[nk]);
+        #endif
     }
+    return nqpts_sym;
 }
 
 void set_omegas(double *omega, double *omega01, double *omegaWts, int Nomega) {
@@ -315,7 +317,6 @@ void set_omegas(double *omega, double *omega01, double *omegaWts, int Nomega) {
     double p1, p2, p3, pp, z1;
     for (int index = 1; index < Nomega + 1; index++) {
         z = cos(M_PI*((double)index - 0.25) / ((double)Nomega + 0.5));
-        if (!rank) printf("z is %9.6f\n", z);
         flag = 1;
         while (flag) {
             p1 = 1.0;
@@ -338,11 +339,13 @@ void set_omegas(double *omega, double *omega01, double *omegaWts, int Nomega) {
     for (int index = 0; index < Nomega; index++) {
         omega[index] = 1.0 / omega01[index] - 1.0;
     }
+    #ifdef DEBUG
     if (!rank) {
         printf("integration point omega and weight are\n");
         for (int index = 0; index < Nomega; index++)
             printf("omega %9.6f, omega01 %9.6f, weight %9.6f\n", omega[index], omega01[index], omegaWts[index]);
     }
+    #endif
 }
 
 void write_settings(RPA_OBJ *pRPA) {
