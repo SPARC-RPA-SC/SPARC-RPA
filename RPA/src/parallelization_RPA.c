@@ -22,6 +22,7 @@
 
 void Setup_Comms_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA) {
     // The Sternheimer equation will be solved in pSPARC. pRPA is the structure saving variables not in pSPARC.
+    dims_divide_QptOmegaEigs(pRPA->nqpts_sym, pRPA->Nomega, pRPA->nuChi0Neig, &pRPA->npqpt, &pRPA->npomega, &pRPA->npnuChi0Neig);
     // 1. q-point communicator, with its own q-point index (coords) and weight, saved in pRPA
     int nprocWorld, rankWorld;
     MPI_Comm_size(MPI_COMM_WORLD, &nprocWorld);
@@ -56,12 +57,28 @@ void Setup_Comms_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA) {
     printf("I am %d in comm world, I am in %d nuChi0Eigscomm, I will handle nuChi0Eigs %d ~ %d\n", rankWorld, pRPA->nuChi0EigscommIndex, pRPA->nuChi0EigsStartIndex, pRPA->nuChi0EigsEndIndex);
     #endif
     // 3.3 nuChi0Eigs bridge communicator, connect all processors in different nuChi0Eigs communicator having the same index, to broadcast eigenvalues and eigenvectors from DFT
+    int nprocNuChi0EigsComm, rankNuChi0EigsComm;
+    MPI_Comm_size(pRPA->nuChi0Eigscomm, &nprocNuChi0EigsComm);
+    MPI_Comm_rank(pRPA->nuChi0Eigscomm, &rankNuChi0EigsComm);
+    int judgeJoinCompute = (pRPA->qptcommIndex >= 0) && (pRPA->omegacommIndex >= 0) && (pRPA->nuChi0EigscommIndex >= 0); // if it is 0, the processor will not join computation
+    color = (judgeJoinCompute > 0) ? rankNuChi0EigsComm : INT_MAX;
+    MPI_Comm_split(MPI_COMM_WORLD, color, 0, &pRPA->nuChi0EigsBridgeComm);
+    pRPA->nuChi0EigsBridgeCommIndex = (judgeJoinCompute > 0) ? rankNuChi0EigsComm : -1;
+    int rankNuChi0EigsBridgeComm; 
+    MPI_Comm_rank(pRPA->nuChi0EigsBridgeComm, &rankNuChi0EigsBridgeComm);
+    #ifdef DEBUG
+    printf("I am %d in comm world, I am in %d nuChi0EigsBridgeComm, My rank in it is %d\n", rankWorld, pRPA->nuChi0EigsBridgeCommIndex, rankNuChi0EigsBridgeComm);
+    #endif
     
     // 4. every nuChi0Eigs communicator replace MPI_COMM_WORLD in Setup_Comms function of SPARC, call Setup_Comms_SPARC in RPA
     // 5. spin communicator, in pSPARC
     // 6. k-point communicator, use ALL k-points, no symmetric reduction, saved in SPARC
     // 7. band communicator, in pSPARC
     // 8. domain communicator, in pSPARC
+}
+
+void dims_divide_QptOmegaEigs(int nqpts_sym, int Nomega, int nuChi0Neig, int *npqpt, int *npomega, int *npnuChi0Neig) {
+    // this function is for computing the optimal dividance on qpts, omegas and nuChi0Eigs.
 }
 
 int judge_npObject(int nObjectInTotal, int sizeFatherComm, int npInput) {

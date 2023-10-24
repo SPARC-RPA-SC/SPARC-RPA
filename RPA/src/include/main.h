@@ -33,6 +33,9 @@ typedef struct _RPA_OBJ {
     int nnuChi0Eigscomm;
     int nuChi0EigsStartIndex;
     int nuChi0EigsEndIndex;
+    MPI_Comm nuChi0EigsBridgeComm; // communicator for linking ALL processors having the same rank of nuChi0EigsComm. Every nuChi0EigsComm needs
+    // a complete set of eigenvalues, eigenvectors and occupations from K-S DFT calculation
+    int nuChi0EigsBridgeCommIndex; // which equals to rank of the processor in nuChi0Eigscomm
     // other settings for RPA computation
     char filename[L_STRING];
     char filename_out[L_STRING]; 
@@ -63,6 +66,13 @@ typedef struct _RPA_OBJ {
     double *omegaWts_loc;
     // amount of eigenvalues of \nu\chi0 to be solved
     int nuChi0Neig;
+    // symmetric reduced k-point grid, saved for reading orbitals
+    int Nkpts_sym;
+    double *kptWts;
+    double *k1;
+    double *k2;
+    double *k3;
+    int **kPqList;
 } RPA_OBJ;
 
 typedef struct _RPA_INPUT_OBJ {
