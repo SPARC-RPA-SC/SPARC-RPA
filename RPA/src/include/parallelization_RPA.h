@@ -5,7 +5,7 @@
 
 void Setup_Comms_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA);
 
-void dims_divide_QptOmegaEigs(int nqpts_sym, int Nomega, int nuChi0Neig, int *npqpt, int *npomega, int *npnuChi0Neig);
+void dims_divide_QptOmegaEigs(int Nqpts_sym, int Nomega, int nuChi0Neig, int *npqpt, int *npomega, int *npnuChi0Neig);
 
 int judge_npObject(int nObjectInTotal, int sizeFatherComm, int npInput);
 

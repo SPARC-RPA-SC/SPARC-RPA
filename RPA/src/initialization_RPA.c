@@ -25,9 +25,9 @@
 #include "main.h"
 #include "initialization_RPA.h"
 #include "parallelization_RPA.h"
+#include "generateKgrid.h"
 
 #define N_MEMBR_RPA 14
-#define TEMP_TOL 1e-12
 
 void initialize_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int argc, char* argv[]) {
     int rank;
@@ -62,18 +62,18 @@ void initialize_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int argc, char* argv[]) {
     MPI_Type_free(&RPA_INPUT_MPI); // free the new MPI datatype
     RPA_copy_inputs(pRPA,&RPA_Input);
     // set q-point grid
-    pRPA->nqpts_sym = pSPARC->Kx*pSPARC->Ky*pSPARC->Kz,
-    pRPA->qptWts = (double *)malloc(pRPA->nqpts_sym * sizeof(double));
-    pRPA->q1 = (double *)malloc(pRPA->nqpts_sym * sizeof(double));
-    pRPA->q2 = (double *)malloc(pRPA->nqpts_sym * sizeof(double));
-    pRPA->q3 = (double *)malloc(pRPA->nqpts_sym * sizeof(double));
-    pRPA->nqpts_sym = set_qpoints(pRPA->qptWts, pRPA->q1, pRPA->q2, pRPA->q3, pSPARC->Kx, pSPARC->Ky, pSPARC->Kz, pSPARC->range_x, pSPARC->range_y, pSPARC->range_z);
+    pRPA->Nqpts_sym = pSPARC->Kx*pSPARC->Ky*pSPARC->Kz,
+    pRPA->qptWts = (double *)malloc(pRPA->Nqpts_sym * sizeof(double));
+    pRPA->q1 = (double *)malloc(pRPA->Nqpts_sym * sizeof(double));
+    pRPA->q2 = (double *)malloc(pRPA->Nqpts_sym * sizeof(double));
+    pRPA->q3 = (double *)malloc(pRPA->Nqpts_sym * sizeof(double));
+    pRPA->Nqpts_sym = set_qpoints(pRPA->qptWts, pRPA->q1, pRPA->q2, pRPA->q3, pSPARC->Kx, pSPARC->Ky, pSPARC->Kz, pSPARC->range_x, pSPARC->range_y, pSPARC->range_z);
     pRPA->kPqList = (int **)malloc(pSPARC->Nkpts_sym * sizeof(int*));
     for (int nk = 0; nk < pSPARC->Nkpts_sym; nk++) {
-        pRPA->kPqList[nk] = (int*)malloc(pRPA->nqpts_sym * sizeof(int));
+        pRPA->kPqList[nk] = (int*)malloc((pRPA->Nqpts_sym + 1) * sizeof(int));
     }
     set_kPq_lists(pRPA->Nkpts_sym, pRPA->k1, pRPA->k2, pRPA->k3, pSPARC->Nkpts_sym, pSPARC->k1, pSPARC->k2, pSPARC->k3, 
-        pRPA->nqpts_sym, pRPA->q1, pRPA->q2, pRPA->q3, pRPA->kPqList);
+        pRPA->Nqpts_sym, pRPA->q1, pRPA->q2, pRPA->q3, pSPARC->range_x, pSPARC->range_y, pSPARC->range_z, pRPA->kPqList);
     // set integration point omegas
     pRPA->omega = (double *)malloc(pRPA->Nomega * sizeof(double));
     pRPA->omega01 = (double *)malloc(pRPA->Nomega * sizeof(double));
@@ -86,83 +86,6 @@ void initialize_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int argc, char* argv[]) {
     if (!rank) {
         write_settings(pRPA);
     }
-}
-
-void transfer_kpoints(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA) {
- // move symmetric k-point grid from pSPARC to pRPA
-    int rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    double Lx = pSPARC->range_x;
-    double Ly = pSPARC->range_y;
-    double Lz = pSPARC->range_z;
-    memcpy(pRPA->kptWts, pSPARC->kptWts, pRPA->Nkpts_sym * sizeof(double));
-    memcpy(pRPA->k1, pSPARC->k1, pRPA->Nkpts_sym * sizeof(double));
-    memcpy(pRPA->k2, pSPARC->k2, pRPA->Nkpts_sym * sizeof(double));
-    memcpy(pRPA->k3, pSPARC->k3, pRPA->Nkpts_sym * sizeof(double));
-    #ifdef DEBUG
-    if (!rank) printf("with symmetry reduction, Nkpts_sym = %d\n", pRPA->Nkpts_sym);
-    for (int nk = 0; nk < pRPA->Nkpts_sym; nk++) {
-        double tpiblx = 2 * M_PI / Lx;
-        double tpibly = 2 * M_PI / Ly;
-        double tpiblz = 2 * M_PI / Lz;
-        if (!rank) printf("k1[%2d]: %8.4f, k2[%2d]: %8.4f, k3[%2d]: %8.4f, kptwt[%2d]: %.3f \n",
-            nk,pRPA->k1[nk]/tpiblx,nk,pRPA->k2[nk]/tpibly,nk,pRPA->k3[nk]/tpiblz,nk,pRPA->kptWts[nk]);
-    }
-    #endif
-}
-
-void recalculate_kpoints(SPARC_OBJ *pSPARC) {
-// to reset k-point grid as complete, without reduction
-    int rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    double Lx = pSPARC->range_x;
-    double Ly = pSPARC->range_y;
-    double Lz = pSPARC->range_z;
-    // calculate M-P grid similar to that in ABINIT
-    int nk1_s = -floor((pSPARC->Kx - 1)/2);
-    int nk1_e = nk1_s + pSPARC->Kx;
-    int nk2_s = -floor((pSPARC->Ky - 1)/2);
-    int nk2_e = nk2_s + pSPARC->Ky;
-    int nk3_s = -floor((pSPARC->Kz - 1)/2);
-    int nk3_e = nk3_s + pSPARC->Kz;
-    int nk1, nk2, nk3;
-    double k1_red, k2_red, k3_red;
-    double k1, k2, k3;
-    int nk;
-    int nkpts = 0;
-
-    for (nk1 = nk1_s; nk1 < nk1_e; nk1++) {
-        for (nk2 = nk2_s; nk2 < nk2_e; nk2++) {
-            for (nk3 = nk3_s; nk3 < nk3_e; nk3++) {
-                k1_red = nk1 * 1.0/pSPARC->Kx;
-                k2_red = nk2 * 1.0/pSPARC->Ky;
-                k3_red = nk3 * 1.0/pSPARC->Kz;
-                k1_red = fmod(k1_red + pSPARC->kptshift[0] / pSPARC->Kx + 0.5 - TEMP_TOL, 1.0) - 0.5 + TEMP_TOL;
-                k2_red = fmod(k2_red + pSPARC->kptshift[1] / pSPARC->Ky + 0.5 - TEMP_TOL, 1.0) - 0.5 + TEMP_TOL;
-                k3_red = fmod(k3_red + pSPARC->kptshift[2] / pSPARC->Kz + 0.5 - TEMP_TOL, 1.0) - 0.5 + TEMP_TOL;
-                k1 = k1_red * 2.0 * M_PI / Lx;
-                k2 = k2_red * 2.0 * M_PI / Ly;
-                k3 = k3_red * 2.0 * M_PI / Lz;
-                // do not reduce k-point
-                pSPARC->k1[nkpts] = k1;
-                pSPARC->k2[nkpts] = k2;
-                pSPARC->k3[nkpts] = k3;
-                pSPARC->kptWts[nkpts]= 1.0;
-                nkpts++;
-            }
-        }
-    }
-    pSPARC->Nkpts_sym = nkpts; // restore number of k points 
-    #ifdef DEBUG
-    if (!rank) printf("without symmetry reduction, Nkpts = %d\n", nkpts);
-    for (nk = 0; nk < pSPARC->Nkpts_sym; nk++) {
-        double tpiblx = 2 * M_PI / Lx;
-        double tpibly = 2 * M_PI / Ly;
-        double tpiblz = 2 * M_PI / Lz;
-        if (!rank) printf("k1[%2d]: %8.4f, k2[%2d]: %8.4f, k3[%2d]: %8.4f, kptwt[%2d]: %.3f \n",
-            nk,pSPARC->k1[nk]/tpiblx,nk,pSPARC->k2[nk]/tpibly,nk,pSPARC->k3[nk]/tpiblz,nk,pSPARC->kptWts[nk]);
-    }
-    #endif
 }
 
 void RPA_Input_MPI_create(MPI_Datatype *RPA_INPUT_MPI) {
@@ -327,76 +250,6 @@ void RPA_copy_inputs(RPA_OBJ *pRPA, RPA_INPUT_OBJ *pRPA_Input) {
         printf("\nN_NUCHI_EIGS, N_OMEGA, MAXIT_FILTERING and CHEB_DEGREE_RPA need to be positive integer.\n");
         exit(EXIT_FAILURE);
     }
-}
-
-int set_qpoints(double *qptWts, double *q1, double *q2, double *q3, int Kx, int Ky, int Kz, double Lx, double Ly, double Lz) {
-    int rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    double sumx = 2.0 * M_PI / Lx;
-    double sumy = 2.0 * M_PI / Ly;
-    double sumz = 2.0 * M_PI / Lz;
-    // calculate M-P grid similar to that in ABINIT
-    int nk1_s = -floor((Kx - 1)/2);
-    int nk1_e = nk1_s + Kx;
-    int nk2_s = -floor((Ky - 1)/2);
-    int nk2_e = nk2_s + Ky;
-    int nk3_s = -floor((Kz - 1)/2);
-    int nk3_e = nk3_s + Kz;
-    int nk1, nk2, nk3;
-    double k1_red, k2_red, k3_red;
-    double k1, k2, k3;
-    int nk, flag;
-    int nqpts_sym = 0;
-
-    for (nk1 = nk1_s; nk1 < nk1_e; nk1++) {
-        for (nk2 = nk2_s; nk2 < nk2_e; nk2++) {
-            for (nk3 = nk3_s; nk3 < nk3_e; nk3++) {
-                k1_red = nk1 * 1.0/Kx;
-                k2_red = nk2 * 1.0/Ky;
-                k3_red = nk3 * 1.0/Kz;
-                k1_red = fmod(k1_red + 0.5 - TEMP_TOL, 1.0) - 0.5 + TEMP_TOL;
-                k2_red = fmod(k2_red + 0.5 - TEMP_TOL, 1.0) - 0.5 + TEMP_TOL;
-                k3_red = fmod(k3_red + 0.5 - TEMP_TOL, 1.0) - 0.5 + TEMP_TOL;
-                k1 = k1_red * 2.0 * M_PI / Lx;
-                k2 = k2_red * 2.0 * M_PI / Ly;
-                k3 = k3_red * 2.0 * M_PI / Lz;
-                flag = 1;
-                for (nk = 0; nk < nqpts_sym; nk++) { // to remove symmetric k-points
-                    if (   (fabs(k1 + q1[nk]) < TEMP_TOL || fabs(k1 + q1[nk] - sumx) < TEMP_TOL) 
-                        && (fabs(k2 + q2[nk]) < TEMP_TOL || fabs(k2 + q2[nk] - sumy) < TEMP_TOL)
-                        && (fabs(k3 + q3[nk]) < TEMP_TOL || fabs(k3 + q3[nk] - sumz) < TEMP_TOL) ) {
-                        flag = 0;
-                        break;
-                    }
-                }
-                if (flag) {
-                    q1[nqpts_sym] = k1;
-                    q2[nqpts_sym] = k2;
-                    q3[nqpts_sym] = k3;
-                    qptWts[nqpts_sym]= 1.0;
-                    nqpts_sym++;
-                } else {
-                    qptWts[nk] = 2.0;
-                }
-            }
-        }
-    }
-    if (!rank) printf("After symmetry reduction, Nqpts_sym = %d\n", nqpts_sym);
-    for (nk = 0; nk < nqpts_sym; nk++) {
-        double tpiblx = 2 * M_PI / Lx;
-        double tpibly = 2 * M_PI / Ly;
-        double tpiblz = 2 * M_PI / Lz;
-        #ifdef DEBUG
-        if (!rank) printf("q1[%2d]: %8.4f, q2[%2d]: %8.4f, q3[%2d]: %8.4f, qptwt[%2d]: %.3f \n",
-            nk,q1[nk]/tpiblx,nk,q2[nk]/tpibly,nk,q3[nk]/tpiblz,nk,qptWts[nk]);
-        #endif
-    }
-    return nqpts_sym;
-}
-
-void set_kPq_lists(int Nkpts_sym, double *k1sym, double *k2sym, double *k3sym, int Nkpts, double *k1, double *k2, double *k3, 
-    int nqpts_sym, double *q1, double *q2, double *q3, int **kPqList) {
-
 }
 
 void set_omegas(double *omega, double *omega01, double *omegaWts, int Nomega) {

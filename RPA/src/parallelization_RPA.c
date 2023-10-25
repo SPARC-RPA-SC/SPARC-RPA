@@ -22,13 +22,13 @@
 
 void Setup_Comms_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA) {
     // The Sternheimer equation will be solved in pSPARC. pRPA is the structure saving variables not in pSPARC.
-    dims_divide_QptOmegaEigs(pRPA->nqpts_sym, pRPA->Nomega, pRPA->nuChi0Neig, &pRPA->npqpt, &pRPA->npomega, &pRPA->npnuChi0Neig);
+    dims_divide_QptOmegaEigs(pRPA->Nqpts_sym, pRPA->Nomega, pRPA->nuChi0Neig, &pRPA->npqpt, &pRPA->npomega, &pRPA->npnuChi0Neig);
     // 1. q-point communicator, with its own q-point index (coords) and weight, saved in pRPA
     int nprocWorld, rankWorld;
     MPI_Comm_size(MPI_COMM_WORLD, &nprocWorld);
     MPI_Comm_rank(MPI_COMM_WORLD, &rankWorld);
-    pRPA->npqpt = judge_npObject(pRPA->nqpts_sym, nprocWorld, pRPA->npqpt);
-    pRPA->nqptQptcomm = distribute_comm_load(pRPA->nqpts_sym, pRPA->npqpt, rankWorld, nprocWorld, &(pRPA->qptcommIndex), &(pRPA->qptStartIndex), &(pRPA->qptEndIndex));
+    pRPA->npqpt = judge_npObject(pRPA->Nqpts_sym, nprocWorld, pRPA->npqpt);
+    pRPA->nqptQptcomm = distribute_comm_load(pRPA->Nqpts_sym, pRPA->npqpt, rankWorld, nprocWorld, &(pRPA->qptcommIndex), &(pRPA->qptStartIndex), &(pRPA->qptEndIndex));
     int color = (pRPA->qptcommIndex >= 0) ? pRPA->qptcommIndex : INT_MAX;
     MPI_Comm_split(MPI_COMM_WORLD, color, 0, &pRPA->qptcomm);
     #ifdef DEBUG
@@ -77,7 +77,7 @@ void Setup_Comms_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA) {
     // 8. domain communicator, in pSPARC
 }
 
-void dims_divide_QptOmegaEigs(int nqpts_sym, int Nomega, int nuChi0Neig, int *npqpt, int *npomega, int *npnuChi0Neig) {
+void dims_divide_QptOmegaEigs(int Nqpts_sym, int Nomega, int nuChi0Neig, int *npqpt, int *npomega, int *npnuChi0Neig) {
     // this function is for computing the optimal dividance on qpts, omegas and nuChi0Eigs.
 }
 

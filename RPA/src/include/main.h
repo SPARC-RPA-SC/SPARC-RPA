@@ -47,7 +47,7 @@ typedef struct _RPA_OBJ {
     int ChebDegreeRPA;
     double tol_ErpaConverge;
     // q-points, which is k-point grid without shift after symmetry reduction
-    int nqpts_sym; // amount of q-points
+    int Nqpts_sym; // amount of q-points
     double *qptWts;
     double *q1;
     double *q2;
