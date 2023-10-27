@@ -36,6 +36,16 @@ typedef struct _RPA_OBJ {
     MPI_Comm nuChi0EigsBridgeComm; // communicator for linking ALL processors having the same rank of nuChi0EigsComm. Every nuChi0EigsComm needs
     // a complete set of eigenvalues, eigenvectors and occupations from K-S DFT calculation
     int nuChi0EigsBridgeCommIndex; // which equals to rank of the processor in nuChi0Eigscomm
+    // SPARC parallelizing parameters to be used in RPA calculation
+    int npspin;         // number of spin communicators
+    int npkpt;          // number of processes for paral. over k-points
+    int npband;         // number of processes for paral. over bands
+    int npNdx;          // number of processes for paral. over domain in x-dir
+    int npNdy;          // number of processes for paral. over domain in y-dir
+    int npNdz;          // number of processes for paral. over domain in z-dir
+    int npNdx_phi;      // number of processes for calculating phi in paral. over domain in x-dir
+    int npNdy_phi;      // number of processes for calculating phi in paral. over domain in y-dir
+    int npNdz_phi;      // number of processes for calculating phi in paral. over domain in z-dir 
     // other settings for RPA computation
     char filename[L_STRING];
     char filename_out[L_STRING]; 
@@ -80,6 +90,16 @@ typedef struct _RPA_INPUT_OBJ {
     int npqpt;          // number of processes for paral. over k-points
     int npomega;
     int npnuChi0Neig;
+    // SPARC parallelizing parameters to be used in RPA calculation
+    int npspin;         // number of spin communicators
+    int npkpt;          // number of processes for paral. over k-points
+    int npband;         // number of processes for paral. over bands
+    int npNdx;          // number of processes for paral. over domain in x-dir
+    int npNdy;          // number of processes for paral. over domain in y-dir
+    int npNdz;          // number of processes for paral. over domain in z-dir
+    int npNdx_phi;      // number of processes for calculating phi in paral. over domain in x-dir
+    int npNdy_phi;      // number of processes for calculating phi in paral. over domain in y-dir
+    int npNdz_phi;      // number of processes for calculating phi in paral. over domain in z-dir 
     // other settings for RPA computation
     int nuChi0Neig;
     int Nomega;

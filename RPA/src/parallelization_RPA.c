@@ -20,7 +20,7 @@
 
 #define min(a,b) ((a)<(b)?(a):(b))
 
-void Setup_Comms_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA) {
+void Setup_Comms_RPA(RPA_OBJ *pRPA) {
     // The Sternheimer equation will be solved in pSPARC. pRPA is the structure saving variables not in pSPARC.
     dims_divide_QptOmegaEigs(pRPA->Nqpts_sym, pRPA->Nomega, pRPA->nuChi0Neig, &pRPA->npqpt, &pRPA->npomega, &pRPA->npnuChi0Neig);
     // 1. q-point communicator, with its own q-point index (coords) and weight, saved in pRPA
