@@ -263,17 +263,17 @@ void Initialize_SPARC_before_SetComm(SPARC_OBJ *pSPARC, int argc, char *argv[]) 
 /**
  * @brief   Performs necessary initialization.
  */
-void Initialize_SPARC_SetComm_after(SPARC_OBJ *pSPARC, MPI_Comm nuChi0Eigscomm) {
+void Initialize_SPARC_SetComm_after(SPARC_OBJ *pSPARC, MPI_Comm nuChi0Eigscomm, int nuChi0EigscommIndex, int rank0nuChi0EigscommInWorld) {
 #ifdef DEBUG
     double t1,t2;
 #endif
     int rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_rank(nuChi0Eigscomm, &rank);
     // set up sub-communicators
     if (pSPARC->SQFlag == 1) {
         Setup_Comms_SQ(pSPARC);
     } else {
-        Setup_Comms_SPARC(pSPARC, nuChi0Eigscomm);
+        Setup_Comms_SPARC(pSPARC, nuChi0Eigscomm, nuChi0EigscommIndex, rank0nuChi0EigscommInWorld);
 
         #ifdef USE_DP_SUBEIG
         #if !defined(USE_MKL) && !defined(USE_SCALAPACK)

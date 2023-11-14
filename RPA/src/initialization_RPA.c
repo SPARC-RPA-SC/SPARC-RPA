@@ -30,7 +30,7 @@
 #include "parallelization_SPARC.h"
 #include "generateKgrid.h"
 
-#define N_MEMBR_RPA 23
+#define N_MEMBR_RPA 21
 
 void initialize_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int argc, char* argv[]) {
     int rank;
@@ -85,7 +85,7 @@ void initialize_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int argc, char* argv[]) {
     
     // for structure RPA, allocating space for delta orbitals, delta density, delta \nu\chi\Delta V...
     // printf("%s\n", pRPA->filename_out);
-    Setup_Comms_RPA(pRPA); // set communicator for RPA calculation, omega/k-point/q-point?/band/domain
+    Setup_Comms_RPA(pRPA, pSPARC->Nspin, pSPARC->Nkpts, pSPARC->Nstates); // set communicator for RPA calculation
     pSPARC->npspin = pRPA->npspin;
     pSPARC->npkpt = pRPA->npkpt;
     pSPARC->npband = pRPA->npband;
@@ -95,7 +95,7 @@ void initialize_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int argc, char* argv[]) {
     pSPARC->npNdx_phi = pRPA->npNdx_phi;
     pSPARC->npNdy_phi = pRPA->npNdy_phi;
     pSPARC->npNdz_phi = pRPA->npNdz_phi;
-    Initialize_SPARC_SetComm_after(pSPARC, pRPA->nuChi0Eigscomm);
+    Initialize_SPARC_SetComm_after(pSPARC, pRPA->nuChi0Eigscomm, pRPA->nuChi0EigscommIndex, pRPA->rank0nuChi0EigscommInWorld);
     pRPA->npspin = pSPARC->npspin;
     pRPA->npkpt = pSPARC->npkpt;
     pRPA->npband = pSPARC->npband;
@@ -105,6 +105,7 @@ void initialize_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int argc, char* argv[]) {
     pRPA->npNdx_phi = pSPARC->npNdx_phi;
     pRPA->npNdy_phi = pSPARC->npNdy_phi;
     pRPA->npNdz_phi = pSPARC->npNdz_phi;
+    MPI_Barrier(MPI_COMM_WORLD); // code above are okay
     if (!rank) {
         write_output_init(pSPARC);
         write_settings(pRPA);
@@ -115,15 +116,13 @@ void RPA_Input_MPI_create(MPI_Datatype *RPA_INPUT_MPI) {
     RPA_INPUT_OBJ rpa_input_tmp;
     MPI_Datatype RPA_TYPES[N_MEMBR_RPA] =   {MPI_INT, MPI_INT, MPI_INT, MPI_INT, MPI_INT,
                                     MPI_INT, MPI_INT, MPI_INT, MPI_INT, MPI_INT,
-                                    MPI_INT, MPI_INT, MPI_INT, MPI_INT, MPI_INT,
-                                    MPI_INT,
+                                    MPI_INT, MPI_INT, MPI_INT, MPI_INT, 
                                     MPI_DOUBLE, 
                                     MPI_CHAR, MPI_CHAR, MPI_CHAR, MPI_CHAR, MPI_CHAR,
                                     MPI_CHAR};
     int blens[N_MEMBR_RPA] = {1, 1, 1, 1, 1,
                      1, 1, 1, 1, 1,
-                     1, 1, 1, 1, 1,
-                     1,
+                     1, 1, 1, 1,
                      1,
                      L_STRING, L_STRING, L_STRING, L_STRING, L_STRING,
                      L_STRING};
@@ -132,8 +131,6 @@ void RPA_Input_MPI_create(MPI_Datatype *RPA_INPUT_MPI) {
     int i = 0;
     MPI_Get_address(&rpa_input_tmp, &base);
     // int type
-    MPI_Get_address(&rpa_input_tmp.npqpt, addr + i++);
-    MPI_Get_address(&rpa_input_tmp.npomega, addr + i++);
     MPI_Get_address(&rpa_input_tmp.npnuChi0Neig, addr + i++);
     MPI_Get_address(&rpa_input_tmp.npspin, addr + i++);
     MPI_Get_address(&rpa_input_tmp.npkpt, addr + i++);
@@ -166,8 +163,6 @@ void RPA_Input_MPI_create(MPI_Datatype *RPA_INPUT_MPI) {
 }
 
 void set_RPA_defaults(RPA_INPUT_OBJ *pRPA_Input, int Nstates, int Nd) {
-    pRPA_Input->npqpt = -1;
-    pRPA_Input->npomega = -1;  
     pRPA_Input->npnuChi0Neig = -1; 
     pRPA_Input->npspin = 0;
     pRPA_Input->npkpt = 0;
@@ -212,13 +207,7 @@ void read_RPA_inputs(RPA_INPUT_OBJ *pRPA_Input) {
             fscanf(input_fp, "%*[^\n]\n"); // skip current line
             continue;
         }
-        if (strcmpi(str,"NP_QPOINT_PARAL_RPA:") == 0) {
-            fscanf(input_fp,"%d", &pRPA_Input->npqpt);
-            fscanf(input_fp, "%*[^\n]\n");
-        } else if (strcmpi(str,"NP_OMEGA_PARAL_RPA:") == 0) {
-            fscanf(input_fp,"%d", &pRPA_Input->npomega);
-            fscanf(input_fp, "%*[^\n]\n");
-        } else if (strcmpi(str,"NP_NUCHI_EIGS_PARAL_RPA:") == 0) {
+        if (strcmpi(str,"NP_NUCHI_EIGS_PARAL_RPA:") == 0) {
             fscanf(input_fp,"%d", &pRPA_Input->npnuChi0Neig);
             fscanf(input_fp, "%*[^\n]\n");
         } else if (strcmpi(str,"NP_SPIN_PARAL_RPA:") == 0) {
@@ -296,9 +285,7 @@ void read_RPA_inputs(RPA_INPUT_OBJ *pRPA_Input) {
 }
 
 void RPA_copy_inputs(RPA_OBJ *pRPA, RPA_INPUT_OBJ *pRPA_Input) {
-    pRPA->npqpt = pRPA_Input->npqpt;      
-    pRPA->npomega = pRPA_Input->npomega; // the validity of np settings will be checked in function Setup_Comms_RPA
-    pRPA->npnuChi0Neig = pRPA_Input->npnuChi0Neig;
+    pRPA->npnuChi0Neig = pRPA_Input->npnuChi0Neig; // the validity of np settings will be checked in function Setup_Comms_RPA
     pRPA->npspin = pRPA_Input->npspin;
     pRPA->npkpt = pRPA_Input->npkpt;
     pRPA->npband = pRPA_Input->npband;
@@ -386,8 +373,6 @@ void write_settings(RPA_OBJ *pRPA) {
     fprintf(output_fp,"***************************************************************************\n");
     fprintf(output_fp,"                         RPA Parallelization                               \n");
     fprintf(output_fp,"***************************************************************************\n");
-    fprintf(output_fp,"NP_QPOINT_PARAL_RPA: %d\n",pRPA->npqpt);
-    fprintf(output_fp,"NP_OMEGA_PARAL_RPA: %d\n",pRPA->npomega);
     fprintf(output_fp,"NP_NUCHI_EIGS_PARAL_RPA: %d\n",pRPA->npnuChi0Neig);
     fprintf(output_fp,"NP_SPIN_PARAL_RPA: %d\n",pRPA->npspin);
     fprintf(output_fp,"NP_KPOINT_PARAL_RPA: %d\n",pRPA->npkpt);

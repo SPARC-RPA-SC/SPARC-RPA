@@ -3,9 +3,9 @@
 
 #include "isddft.h"
 
-void Setup_Comms_RPA(RPA_OBJ *pRPA);
+void Setup_Comms_RPA(RPA_OBJ *pRPA, int Nspin, int Nkpts, int Nstates);
 
-void dims_divide_QptOmegaEigs(int Nqpts_sym, int Nomega, int nuChi0Neig, int *npqpt, int *npomega, int *npnuChi0Neig);
+void dims_divide_Eigs(int nuChi0Neig, int Nspin, int Nkpts, int Nstates, int *npnuChi0Neig, int *npspin, int *npkpt, int *npband);
 
 int judge_npObject(int nObjectInTotal, int sizeFatherComm, int npInput);
 

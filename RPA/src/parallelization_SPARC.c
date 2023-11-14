@@ -52,7 +52,7 @@
  * 1. read the npspin, npkpt, npband and npNd again from the input
  * 2. free all allocated space at the first initialization before running this function
  */
-void Setup_Comms_SPARC(SPARC_OBJ *pSPARC, MPI_Comm nuChi0Eigscomm) {
+void Setup_Comms_SPARC(SPARC_OBJ *pSPARC, MPI_Comm nuChi0Eigscomm, int nuChi0EigscommIndex, int rank0nuChi0EigscommInWorld) {
     int i, j, dims[3] = {0, 0, 0}, periods[3], ierr;
     int nproc, rank;
     int size_spincomm, rank_spincomm;
@@ -65,8 +65,10 @@ void Setup_Comms_SPARC(SPARC_OBJ *pSPARC, MPI_Comm nuChi0Eigscomm) {
 #endif
     MPI_Comm_size(nuChi0Eigscomm, &nproc);
     MPI_Comm_rank(nuChi0Eigscomm, &rank);
+
+    int flagPrintNuChi0Eigscomm = (nuChi0EigscommIndex == 0); // set which nuchi0Eigscomm will print output
 #ifdef DEBUG
-    if (rank == 0) printf("Set up communicators.\n");
+    if ((rank == 0) && flagPrintNuChi0Eigscomm) printf("Set up communicators.\n");
 #endif
 
     // in the case user doesn't set any parallelization parameters, search for a good
@@ -94,7 +96,7 @@ void Setup_Comms_SPARC(SPARC_OBJ *pSPARC, MPI_Comm nuChi0Eigscomm) {
         pSPARC->npspin = min(nproc, pSPARC->Nspin);
     } else if (pSPARC->npspin > pSPARC->Nspin || pSPARC->npspin > nproc) {
         pSPARC->npspin = min(nproc, pSPARC->Nspin);
-        if (rank == 0) {
+        if ((rank == 0) && flagPrintNuChi0Eigscomm) {
             printf("WARNING: npspin is larger than pSPARC->Nspin or nproc!\n"
                    "         Forcing npspin = min(nproc, pSPARC->Nspin) = %d.\n\n",pSPARC->npspin);
         }
@@ -135,7 +137,7 @@ void Setup_Comms_SPARC(SPARC_OBJ *pSPARC, MPI_Comm nuChi0Eigscomm) {
     MPI_Comm_split(nuChi0Eigscomm, color, 0, &pSPARC->spincomm);
 #ifdef DEBUG
     t2 = MPI_Wtime();
-    if (rank == 0) printf("\n--set up spincomm took %.3f ms\n",(t2-t1)*1000);
+    if ((rank == 0) && flagPrintNuChi0Eigscomm) printf("\n--set up spincomm took %.3f ms\n",(t2-t1)*1000);
 #endif
     MPI_Comm_rank(pSPARC->spincomm, &rank_spincomm);
 
@@ -158,7 +160,7 @@ void Setup_Comms_SPARC(SPARC_OBJ *pSPARC, MPI_Comm nuChi0Eigscomm) {
         pSPARC->npkpt = min(size_spincomm, pSPARC->Nkpts_sym); // paral over k-points as much as possible
     } else if (pSPARC->npkpt > pSPARC->Nkpts_sym || pSPARC->npkpt > size_spincomm) {
         pSPARC->npkpt = min(size_spincomm, pSPARC->Nkpts_sym);
-        if (rank == 0) {
+        if ((rank == 0) && flagPrintNuChi0Eigscomm) {
             printf("WARNING: npkpt is larger than number of k-points after symmetry reduction or size_spincomm!\n"
                    "         Forcing npkpt = min(size_spincomm, Nkpts_sym) = %d.\n\n",pSPARC->npkpt);
         }
@@ -198,7 +200,7 @@ void Setup_Comms_SPARC(SPARC_OBJ *pSPARC, MPI_Comm nuChi0Eigscomm) {
 
 #ifdef DEBUG
     t2 = MPI_Wtime();
-    if (rank == 0) printf("\n--set up kptcomm took %.3f ms\n",(t2-t1)*1000);
+    if ((rank == 0) && flagPrintNuChi0Eigscomm) printf("\n--set up kptcomm took %.3f ms\n",(t2-t1)*1000);
 #endif
 
     // Local k-points array
@@ -237,7 +239,7 @@ void Setup_Comms_SPARC(SPARC_OBJ *pSPARC, MPI_Comm nuChi0Eigscomm) {
     pSPARC->npNdz_kptcomm = dims[2];
 
 #ifdef DEBUG
-    if (!rank)
+    if ((!rank) && flagPrintNuChi0Eigscomm)
     printf("\n kpt_topo #%d, kptcomm topology dims = {%d, %d, %d}, nodes/proc = {%.2f,%.2f,%.2f}\n", pSPARC->kptcomm_index,
             dims[0],dims[1],dims[2],(double)gridsizes[0]/dims[0],(double)gridsizes[1]/dims[1],(double)gridsizes[2]/dims[2]);
 #endif
@@ -368,7 +370,7 @@ void Setup_Comms_SPARC(SPARC_OBJ *pSPARC, MPI_Comm nuChi0Eigscomm) {
 
 #ifdef DEBUG
         t2 = MPI_Wtime();
-        if (rank == 0) printf("\n--set up kptcomm_inter took %.3f ms\n" ,(t2-t1)*1000);
+        if ((rank == 0) && flagPrintNuChi0Eigscomm) printf("\n--set up kptcomm_inter took %.3f ms\n" ,(t2-t1)*1000);
 #endif
     } else {
         pSPARC->kptcomm_topo_excl = MPI_COMM_NULL;
@@ -434,7 +436,7 @@ void Setup_Comms_SPARC(SPARC_OBJ *pSPARC, MPI_Comm nuChi0Eigscomm) {
 
 #ifdef DEBUG
     t2 = MPI_Wtime();
-    if (rank == 0) printf("\n--set up bandcomm took %.3f ms\n",(t2-t1)*1000);
+    if ((rank == 0) && flagPrintNuChi0Eigscomm) printf("\n--set up bandcomm took %.3f ms\n",(t2-t1)*1000);
 #endif
 
     //------------------------------------------------//
@@ -480,7 +482,7 @@ void Setup_Comms_SPARC(SPARC_OBJ *pSPARC, MPI_Comm nuChi0Eigscomm) {
     periods[1] = 1 - pSPARC->BCy;
     periods[2] = 1 - pSPARC->BCz;
 #ifdef DEBUG
-    if (!rank) printf("rank = %d, dmcomm dims = {%d, %d, %d}\n", rank, pSPARC->npNdx, pSPARC->npNdy, pSPARC->npNdz);
+    if ((!rank) && flagPrintNuChi0Eigscomm) printf("rank = %d, dmcomm dims = {%d, %d, %d}\n", rank, pSPARC->npNdx, pSPARC->npNdy, pSPARC->npNdz);
     t1 = MPI_Wtime();
 #endif
 
@@ -492,7 +494,7 @@ void Setup_Comms_SPARC(SPARC_OBJ *pSPARC, MPI_Comm nuChi0Eigscomm) {
     }
 
 #ifdef DEBUG
-    if (!rank) printf("gridsizes = [%d, %d, %d], Nstates = %d, dmcomm dims = [%d, %d, %d]\n",
+    if ((!rank) && flagPrintNuChi0Eigscomm) printf("gridsizes = [%d, %d, %d], Nstates = %d, dmcomm dims = [%d, %d, %d]\n",
         gridsizes[0],gridsizes[1],gridsizes[2],pSPARC->Nstates,dims[0],dims[1],dims[2]);
 #endif
 
@@ -531,7 +533,7 @@ void Setup_Comms_SPARC(SPARC_OBJ *pSPARC, MPI_Comm nuChi0Eigscomm) {
     }
 #ifdef DEBUG
     t2 = MPI_Wtime();
-    if (rank == 0) printf("\n--set up dmcomm took %.3f ms\n",(t2-t1)*1000);
+    if ((rank == 0) && flagPrintNuChi0Eigscomm) printf("\n--set up dmcomm took %.3f ms\n",(t2-t1)*1000);
 #endif
 
     // Set up a 26 neighbor communicator for nonorthogonal systems
@@ -621,7 +623,7 @@ void Setup_Comms_SPARC(SPARC_OBJ *pSPARC, MPI_Comm nuChi0Eigscomm) {
     MPI_Comm_split(pSPARC->kptcomm, color, pSPARC->bandcomm_index, &pSPARC->blacscomm);
 #ifdef DEBUG
     t2 = MPI_Wtime();
-    if (rank == 0) printf("\n--set up blacscomm took %.3f ms\n",(t2-t1)*1000);
+    if ((rank == 0) && flagPrintNuChi0Eigscomm) printf("\n--set up blacscomm took %.3f ms\n",(t2-t1)*1000);
 #endif
 
 #if defined(USE_MKL) || defined(USE_SCALAPACK)
@@ -641,7 +643,7 @@ void Setup_Comms_SPARC(SPARC_OBJ *pSPARC, MPI_Comm nuChi0Eigscomm) {
         usermap_0 = (int *)malloc(sizeof(int)*size_blacscomm);
         usermap_1 = (int *)malloc(sizeof(int)*size_blacscomm);
         for (i = 0; i < size_blacscomm; i++) {
-            usermap[i] = usermap_0[i] = usermap_1[i] = i + rank - rank_kptcomm + rank_dmcomm * pSPARC->npband;
+            usermap[i] = usermap_0[i] = usermap_1[i] = rank0nuChi0EigscommInWorld + (i + rank - rank_kptcomm + rank_dmcomm * pSPARC->npband);
         }
 
         // in order to use a subgroup of blacscomm, use the following
@@ -651,7 +653,7 @@ void Setup_Comms_SPARC(SPARC_OBJ *pSPARC, MPI_Comm nuChi0Eigscomm) {
         //SPARC_Dims_create(pSPARC->npband, 2, bandsizes, 1, dims, &ierr);
         ScaLAPACK_Dims_2D_BLCYC(size_blacscomm, bandsizes, dims);
 #ifdef DEBUG
-        if (!rank) printf("rank = %d, size_blacscomm = %d, ScaLAPACK topology Dims = (%d, %d)\n", rank, size_blacscomm, dims[0], dims[1]);
+        if ((!rank) && flagPrintNuChi0Eigscomm) printf("rank = %d, size_blacscomm = %d, ScaLAPACK topology Dims = (%d, %d)\n", rank, size_blacscomm, dims[0], dims[1]);
 #endif
         // TODO: make it able to use a subgroup of the blacscomm! For now just enforce it.
         if (dims[0] * dims[1] != size_blacscomm) {
@@ -662,14 +664,22 @@ void Setup_Comms_SPARC(SPARC_OBJ *pSPARC, MPI_Comm nuChi0Eigscomm) {
         usermap = (int *)malloc(sizeof(int)*1);
         usermap_0 = (int *)malloc(sizeof(int)*1);
         usermap_1 = (int *)malloc(sizeof(int)*1);
-        usermap[0] = usermap_0[0] = usermap_1[0] = rank;
+        usermap[0] = usermap_0[0] = usermap_1[0] = rank0nuChi0EigscommInWorld + rank;
         dims[0] = dims[1] = 1;
     }
 
 #ifdef DEBUG
-    if (!rank) {
+    if ((!rank) && flagPrintNuChi0Eigscomm) {
         printf("nproc = %d, size_blacscomm = %d = dims[0] * dims[1] = (%d, %d)\n", nproc, size_blacscomm, dims[0], dims[1]);
     }
+    // MPI_Barrier(MPI_COMM_WORLD);
+    // if (rank == 3) {
+    //     printf("usermap of rank %d:", rank);
+    //     for (i = 0; i < size_blacscomm; i++) {
+    //         printf(" %d", usermap[i]);
+    //     }
+    //     printf("\n");
+    // }
 #endif
     // TODO: CHANGE USERMAP TO COLUMN MAJOR!
     int myrank_mpi, nprocs_mpi;
@@ -700,7 +710,7 @@ void Setup_Comms_SPARC(SPARC_OBJ *pSPARC, MPI_Comm nuChi0Eigscomm) {
 
     // get coord of each process in original context
     Cblacs_gridinfo( pSPARC->ictxt_blacs, &nprow, &npcol, &myrow, &mycol );
-    if (!rank) printf("rank = %d, myrank_mpi %d, nprocs_mpi %d, bandcomm_index %d, dmcomm exist %d, myrow %d, nprow %d, mycol %d, npcol %d\n", rank, myrank_mpi, nprocs_mpi, pSPARC->bandcomm_index, (pSPARC->dmcomm != MPI_COMM_NULL), myrow, nprow, mycol, npcol);
+    if ((!rank) && flagPrintNuChi0Eigscomm) printf("rank = %d, myrank_mpi %d, nprocs_mpi %d, bandcomm_index %d, dmcomm exist %d, myrow %d, nprow %d, mycol %d, npcol %d\n", rank, myrank_mpi, nprocs_mpi, pSPARC->bandcomm_index, (pSPARC->dmcomm != MPI_COMM_NULL), myrow, nprow, mycol, npcol);
     int ZERO = 0, mb, nb, llda;
     mb = max(1, DMndspe);
     nb = (pSPARC->Nstates - 1) / pSPARC->npband + 1; // equal to ceil(Nstates/npband), for int only
@@ -717,7 +727,7 @@ void Setup_Comms_SPARC(SPARC_OBJ *pSPARC, MPI_Comm nuChi0Eigscomm) {
     int temp_r, temp_c;
     temp_r = numroc_( &DMndspe, &mb, &myrow, &ZERO, &nprow);
     temp_c = numroc_( &pSPARC->Nstates, &nb, &mycol, &ZERO, &npcol);
-    if (!rank) printf("rank = %2d, my blacs rank = %d, BLCYC size (%d, %d), actual size (%d, %d), DMndspe %d, mb %d, myrow %d, nprow %d, Nstates %d, nb %d, mycol %d, npcol %d\n", rank, pSPARC->bandcomm_index, temp_r, temp_c, DMndsp, pSPARC->Nband_bandcomm,
+    if ((!rank) && flagPrintNuChi0Eigscomm) printf("rank = %2d, my blacs rank = %d, BLCYC size (%d, %d), actual size (%d, %d), DMndspe %d, mb %d, myrow %d, nprow %d, Nstates %d, nb %d, mycol %d, npcol %d\n", rank, pSPARC->bandcomm_index, temp_r, temp_c, DMndsp, pSPARC->Nband_bandcomm,
         DMndspe, mb, myrow, nprow, pSPARC->Nstates, nb, mycol, npcol);
 #endif
     // get coord of each process in block cyclic topology context
@@ -772,7 +782,7 @@ void Setup_Comms_SPARC(SPARC_OBJ *pSPARC, MPI_Comm nuChi0Eigscomm) {
         mbQ = nbQ = pSPARC->eig_paral_blksz; // block size for storing subspace eigenvectors
     }
 #ifdef DEBUG
-    if (!rank) printf("rank = %d, mb = nb = %d, mbQ = nbQ = %d\n", rank, mb, mbQ);
+    if ((!rank) && flagPrintNuChi0Eigscomm) printf("rank = %d, mb = nb = %d, mbQ = nbQ = %d\n", rank, mb, mbQ);
 #endif
     if (pSPARC->bandcomm_index != -1 && pSPARC->dmcomm != MPI_COMM_NULL) {
         pSPARC->nr_Hp_BLCYC = pSPARC->nr_Mp_BLCYC = numroc_( &pSPARC->Nstates, &mb, &myrow, &ZERO, &nprow);
@@ -876,7 +886,7 @@ void Setup_Comms_SPARC(SPARC_OBJ *pSPARC, MPI_Comm nuChi0Eigscomm) {
     MPI_Cart_create(nuChi0Eigscomm, 3, dims, periods, 1, &pSPARC->dmcomm_phi); // 1 is to reorder rank
 
 #ifdef DEBUG
-    if (rank == 0) {
+    if ((rank == 0) && flagPrintNuChi0Eigscomm) {
         printf("========================================================================\n"
                    "Poisson domain decomposition:"
                    "np total = %d, {Nx, Ny, Nz} = {%d, %d, %d}\n"
@@ -981,7 +991,7 @@ void Setup_Comms_SPARC(SPARC_OBJ *pSPARC, MPI_Comm nuChi0Eigscomm) {
 
 #ifdef DEBUG
     t2 = MPI_Wtime();
-    if (rank == 0) printf("\n--set up dmcomm_phi took %.3f ms\n",(t2-t1)*1000);
+    if ((rank == 0) && flagPrintNuChi0Eigscomm) printf("\n--set up dmcomm_phi took %.3f ms\n",(t2-t1)*1000);
 #endif
 
     // allocate memory for storing eigenvalues
@@ -1190,7 +1200,7 @@ void Setup_Comms_SPARC(SPARC_OBJ *pSPARC, MPI_Comm nuChi0Eigscomm) {
 
     // parallelization summary
     #ifdef DEBUG
-    if (rank == 0) {
+    if ((rank == 0) && flagPrintNuChi0Eigscomm) {
         printf("\n");
         printf("-----------------------------------------------\n");
         printf("Parallelization summary\n");

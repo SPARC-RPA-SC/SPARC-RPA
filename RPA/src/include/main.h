@@ -15,24 +15,13 @@
 
 typedef struct _RPA_OBJ {
     // MPI communicators and their parallelizing parameters
-    MPI_Comm qptcomm; // Cartesian topology set up on top of a kptcomm (LOCAL)
-    int npqpt;          // number of processes for paral. over q-points, symmetry reduced k-points
-    int qptcommIndex;
-    int nqptQptcomm;
-    int qptStartIndex;
-    int qptEndIndex;
-    MPI_Comm omegacomm; // communicator for designated omegas
-    int npomega;
-    int omegacommIndex;
-    int nomegaOmegacomm;
-    int omegaStartIndex;
-    int omegaEndIndex;
     MPI_Comm nuChi0Eigscomm; // communicator for dividing trial vectors, whose amount equals to number of desired eigs of nuChi0
     int npnuChi0Neig;
     int nuChi0EigscommIndex;
-    int nnuChi0Eigscomm;
+    int nNuChi0Eigscomm;
     int nuChi0EigsStartIndex;
     int nuChi0EigsEndIndex;
+    int rank0nuChi0EigscommInWorld;
     MPI_Comm nuChi0EigsBridgeComm; // communicator for linking ALL processors having the same rank of nuChi0EigsComm. Every nuChi0EigsComm needs
     // a complete set of eigenvalues, eigenvectors and occupations from K-S DFT calculation
     int nuChi0EigsBridgeCommIndex; // which equals to rank of the processor in nuChi0Eigscomm
@@ -87,8 +76,6 @@ typedef struct _RPA_OBJ {
 
 typedef struct _RPA_INPUT_OBJ {
     // MPI parallelizing parameters
-    int npqpt;          // number of processes for paral. over k-points
-    int npomega;
     int npnuChi0Neig;
     // SPARC parallelizing parameters to be used in RPA calculation
     int npspin;         // number of spin communicators

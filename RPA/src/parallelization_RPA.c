@@ -20,39 +20,21 @@
 
 #define min(a,b) ((a)<(b)?(a):(b))
 
-void Setup_Comms_RPA(RPA_OBJ *pRPA) {
+void Setup_Comms_RPA(RPA_OBJ *pRPA, int Nspin, int Nkpts, int Nstates) {
     // The Sternheimer equation will be solved in pSPARC. pRPA is the structure saving variables not in pSPARC.
-    dims_divide_QptOmegaEigs(pRPA->Nqpts_sym, pRPA->Nomega, pRPA->nuChi0Neig, &pRPA->npqpt, &pRPA->npomega, &pRPA->npnuChi0Neig);
+    dims_divide_Eigs(pRPA->nuChi0Neig, Nspin, Nkpts, Nstates, &pRPA->npnuChi0Neig, &pRPA->npspin, &pRPA->npkpt, &pRPA->npband);
     // 1. q-point communicator, with its own q-point index (coords) and weight, saved in pRPA
     int nprocWorld, rankWorld;
     MPI_Comm_size(MPI_COMM_WORLD, &nprocWorld);
     MPI_Comm_rank(MPI_COMM_WORLD, &rankWorld);
-    pRPA->npqpt = judge_npObject(pRPA->Nqpts_sym, nprocWorld, pRPA->npqpt);
-    pRPA->nqptQptcomm = distribute_comm_load(pRPA->Nqpts_sym, pRPA->npqpt, rankWorld, nprocWorld, &(pRPA->qptcommIndex), &(pRPA->qptStartIndex), &(pRPA->qptEndIndex));
-    int color = (pRPA->qptcommIndex >= 0) ? pRPA->qptcommIndex : INT_MAX;
-    MPI_Comm_split(MPI_COMM_WORLD, color, 0, &pRPA->qptcomm);
-    #ifdef DEBUG
-    printf("I am %d in comm world, I am in %d qptcomm, I will handle qpt %d ~ %d\n", rankWorld, pRPA->qptcommIndex, pRPA->qptStartIndex, pRPA->qptEndIndex);
-    #endif
-    // 2. omega communicator, with its own omega value and omega weight, saved in pRPA
-    int nprocQptcomm, rankQptcomm;
-    MPI_Comm_size(pRPA->qptcomm, &nprocQptcomm);
-    MPI_Comm_rank(pRPA->qptcomm, &rankQptcomm);
-    pRPA->npomega = judge_npObject(pRPA->Nomega, nprocQptcomm, pRPA->npomega);
-    pRPA->nomegaOmegacomm = distribute_comm_load(pRPA->Nomega, pRPA->npomega, rankQptcomm, nprocQptcomm, &(pRPA->omegacommIndex), &(pRPA->omegaStartIndex), &(pRPA->omegaEndIndex));
-    color = (pRPA->omegacommIndex >= 0) ? pRPA->omegacommIndex : INT_MAX;
-    MPI_Comm_split(pRPA->qptcomm, color, 0, &pRPA->omegacomm);
-    #ifdef DEBUG
-    printf("I am %d in comm world, I am in %d omegacomm, I will handle omega %d ~ %d\n", rankWorld, pRPA->omegacommIndex, pRPA->omegaStartIndex, pRPA->omegaEndIndex);
-    #endif
     // 3. nuChi0Eigs communicator, distribute all trial eigenvectors of nuChi0, saved in pRPA
-    int nprocOmegacomm, rankOmegacomm;
-    MPI_Comm_size(pRPA->omegacomm, &nprocOmegacomm);
-    MPI_Comm_rank(pRPA->omegacomm, &rankOmegacomm);
-    pRPA->npnuChi0Neig = judge_npObject(pRPA->nuChi0Neig, nprocOmegacomm, pRPA->npnuChi0Neig);
-    pRPA->nnuChi0Eigscomm = distribute_comm_load(pRPA->nuChi0Neig, pRPA->npnuChi0Neig, rankOmegacomm, nprocOmegacomm, &(pRPA->nuChi0EigscommIndex), &(pRPA->nuChi0EigsStartIndex), &(pRPA->nuChi0EigsEndIndex));
-    color = (pRPA->nuChi0EigscommIndex >= 0) ? pRPA->nuChi0EigscommIndex : INT_MAX;
-    MPI_Comm_split(pRPA->omegacomm, color, 0, &pRPA->nuChi0Eigscomm);
+    pRPA->npnuChi0Neig = judge_npObject(pRPA->nuChi0Neig, nprocWorld, pRPA->npnuChi0Neig);
+    pRPA->nNuChi0Eigscomm = distribute_comm_load(pRPA->nuChi0Neig, pRPA->npnuChi0Neig, rankWorld, nprocWorld, &(pRPA->nuChi0EigscommIndex), &(pRPA->nuChi0EigsStartIndex), &(pRPA->nuChi0EigsEndIndex));
+    int color = (pRPA->nuChi0EigscommIndex >= 0) ? pRPA->nuChi0EigscommIndex : INT_MAX;
+    MPI_Comm_split(MPI_COMM_WORLD, color, 0, &pRPA->nuChi0Eigscomm);
+
+    pRPA->rank0nuChi0EigscommInWorld = rankWorld;
+    MPI_Bcast(&pRPA->rank0nuChi0EigscommInWorld, 1, MPI_INT, 0, pRPA->nuChi0Eigscomm);
     #ifdef DEBUG
     printf("I am %d in comm world, I am in %d nuChi0Eigscomm, I will handle nuChi0Eigs %d ~ %d\n", rankWorld, pRPA->nuChi0EigscommIndex, pRPA->nuChi0EigsStartIndex, pRPA->nuChi0EigsEndIndex);
     #endif
@@ -60,9 +42,9 @@ void Setup_Comms_RPA(RPA_OBJ *pRPA) {
     int nprocNuChi0EigsComm, rankNuChi0EigsComm;
     MPI_Comm_size(pRPA->nuChi0Eigscomm, &nprocNuChi0EigsComm);
     MPI_Comm_rank(pRPA->nuChi0Eigscomm, &rankNuChi0EigsComm);
-    int judgeJoinCompute = (pRPA->qptcommIndex >= 0) && (pRPA->omegacommIndex >= 0) && (pRPA->nuChi0EigscommIndex >= 0); // if it is 0, the processor will not join computation
+    int judgeJoinCompute = (pRPA->nuChi0EigscommIndex >= 0); // if it is 0, the processor will not join computation
     color = (judgeJoinCompute > 0) ? rankNuChi0EigsComm : INT_MAX;
-    MPI_Comm_split(MPI_COMM_WORLD, color, 0, &pRPA->nuChi0EigsBridgeComm);
+    MPI_Comm_split(MPI_COMM_WORLD, color, rankNuChi0EigsComm, &pRPA->nuChi0EigsBridgeComm);
     pRPA->nuChi0EigsBridgeCommIndex = (judgeJoinCompute > 0) ? rankNuChi0EigsComm : -1;
     int rankNuChi0EigsBridgeComm; 
     MPI_Comm_rank(pRPA->nuChi0EigsBridgeComm, &rankNuChi0EigsBridgeComm);
@@ -77,7 +59,7 @@ void Setup_Comms_RPA(RPA_OBJ *pRPA) {
     // 8. domain communicator, in pSPARC
 }
 
-void dims_divide_QptOmegaEigs(int Nqpts_sym, int Nomega, int nuChi0Neig, int *npqpt, int *npomega, int *npnuChi0Neig) {
+void dims_divide_Eigs(int nuChi0Neig, int Nspin, int Nkpts, int Nstates, int *npnuChi0Neig, int *npspin, int *npkpt, int *npband) {
     // this function is for computing the optimal dividance on qpts, omegas and nuChi0Eigs.
 }
 
