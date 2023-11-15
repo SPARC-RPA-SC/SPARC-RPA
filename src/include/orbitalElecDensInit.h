@@ -14,6 +14,8 @@
 
 #include "isddft.h"
 
+void read_cube_and_dist_vec(SPARC_OBJ *pSPARC, char filenames[3][L_STRING+L_PSD], double *data_dist, int n, int DMverts[6], MPI_Comm comm);
+
 /**
  * @brief   Initialze electron density.
  */

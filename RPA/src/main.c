@@ -12,12 +12,16 @@
  Structure of RPA program
  main
  ├──initialization_RPA
- |  ├──readInput
- |  ├──generateReducedKgrid
- |  ├──parallelization
- |  └──omegaMeshWeight
- ├──read_scf
- ├──prepare_Hamiltonian
+ |  ├──Initialize_SPARC_before_SetComm
+ |  ├──transfer_kpoints, recalculate_kpoints
+ |  ├──RPA_Input_MPI_create, set_RPA_defaults, read_RPA_inputs, RPA_copy_inputs
+ |  ├──set_kPq_lists, set_omegas
+ |  ├──Setup_Comms_RPA
+ |  ├──Initialize_SPARC_SetComm_after
+ |  └──write_settings
+ ├──restore_electronicGroundState
+ |  ├──restore_orbitals
+ |  └──restore_electronDensity
  ├──chebyshevFiltering 
  |  ├──(if PDEP method is used) 
  |  |  nuChi0MultiplyDeltaV 
@@ -38,7 +42,6 @@
 #include "main.h"
 #include "initialization_RPA.h"
 #include "restoreElectronicGroundState.h"
-#include "readScf.h"
 #include "chebyshevFiltering.h"
 #include "printResult.h"
 #include "finalization_RPA.h"
@@ -62,7 +65,7 @@ int main(int argc, char *argv[]) {
 
     initialize_RPA(&SPARC, &RPA, argc, argv);
 
-    restore_electronicGroundState(&SPARC, RPA.nuChi0Eigscomm, RPA.nuChi0EigscommIndex, RPA.rank0nuChi0EigscommInWorld);
+    restore_electronicGroundState(&SPARC, RPA.nuChi0Eigscomm, RPA.nuChi0EigsBridgeComm, RPA.nuChi0EigscommIndex, RPA.rank0nuChi0EigscommInWorld);
 
     // prepare_Hamiltonian(&SPARC, &RPA); // for generating Veff and Vnl by SPARC, then transferring to RPA
 

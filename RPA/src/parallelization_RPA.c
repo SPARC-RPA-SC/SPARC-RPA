@@ -44,7 +44,7 @@ void Setup_Comms_RPA(RPA_OBJ *pRPA, int Nspin, int Nkpts, int Nstates) {
     MPI_Comm_rank(pRPA->nuChi0Eigscomm, &rankNuChi0EigsComm);
     int judgeJoinCompute = (pRPA->nuChi0EigscommIndex >= 0); // if it is 0, the processor will not join computation
     color = (judgeJoinCompute > 0) ? rankNuChi0EigsComm : INT_MAX;
-    MPI_Comm_split(MPI_COMM_WORLD, color, rankNuChi0EigsComm, &pRPA->nuChi0EigsBridgeComm);
+    MPI_Comm_split(MPI_COMM_WORLD, color, pRPA->nuChi0EigscommIndex, &pRPA->nuChi0EigsBridgeComm);
     pRPA->nuChi0EigsBridgeCommIndex = (judgeJoinCompute > 0) ? rankNuChi0EigsComm : -1;
     int rankNuChi0EigsBridgeComm; 
     MPI_Comm_rank(pRPA->nuChi0EigsBridgeComm, &rankNuChi0EigsBridgeComm);
