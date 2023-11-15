@@ -37,6 +37,7 @@
 
 #include "main.h"
 #include "initialization_RPA.h"
+#include "restoreElectronicGroundState.h"
 #include "readScf.h"
 #include "chebyshevFiltering.h"
 #include "printResult.h"
@@ -61,7 +62,7 @@ int main(int argc, char *argv[]) {
 
     initialize_RPA(&SPARC, &RPA, argc, argv);
 
-    read_scf(&SPARC);
+    restore_electronicGroundState(&SPARC, RPA.nuChi0Eigscomm, RPA.nuChi0EigscommIndex, RPA.rank0nuChi0EigscommInWorld);
 
     // prepare_Hamiltonian(&SPARC, &RPA); // for generating Veff and Vnl by SPARC, then transferring to RPA
 
