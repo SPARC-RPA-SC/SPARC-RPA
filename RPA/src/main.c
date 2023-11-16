@@ -21,6 +21,8 @@
  |  └──write_settings
  ├──restore_electronicGroundState
  |  ├──restore_orbitals
+ |  |  ├──read_orbitals_distributed_gamma_RPA
+ |  |  └──read_orbitals_distributed_kpt_RPA
  |  └──restore_electronDensity
  ├──chebyshevFiltering 
  |  ├──(if PDEP method is used) 
@@ -65,7 +67,7 @@ int main(int argc, char *argv[]) {
 
     initialize_RPA(&SPARC, &RPA, argc, argv);
 
-    restore_electronicGroundState(&SPARC, RPA.nuChi0Eigscomm, RPA.nuChi0EigsBridgeComm, RPA.nuChi0EigscommIndex, RPA.rank0nuChi0EigscommInWorld);
+    restore_electronicGroundState(&SPARC, RPA.nuChi0Eigscomm, RPA.nuChi0EigsBridgeComm, RPA.nuChi0EigscommIndex, RPA.rank0nuChi0EigscommInWorld, RPA.k1, RPA.k2, RPA.k3, RPA.kPqList);
 
     // prepare_Hamiltonian(&SPARC, &RPA); // for generating Veff and Vnl by SPARC, then transferring to RPA
 

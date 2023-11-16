@@ -71,7 +71,7 @@ void initialize_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int argc, char* argv[]) {
     pRPA->q2 = (double *)malloc(pRPA->Nqpts_sym * sizeof(double));
     pRPA->q3 = (double *)malloc(pRPA->Nqpts_sym * sizeof(double));
     pRPA->Nqpts_sym = set_qpoints(pRPA->qptWts, pRPA->q1, pRPA->q2, pRPA->q3, pSPARC->Kx, pSPARC->Ky, pSPARC->Kz, pSPARC->range_x, pSPARC->range_y, pSPARC->range_z);
-    pRPA->kPqList = (int **)malloc(pSPARC->Nkpts_sym * sizeof(int*));
+    pRPA->kPqList = (int **)malloc(pSPARC->Nkpts_sym * sizeof(int*)); // pSPARC saves k-point complete grid, no symmetry. pSPARC->Nkpts_sym = pSPARC->Nkpts
     for (int nk = 0; nk < pSPARC->Nkpts_sym; nk++) {
         pRPA->kPqList[nk] = (int*)malloc((pRPA->Nqpts_sym + 1) * sizeof(int));
     }
