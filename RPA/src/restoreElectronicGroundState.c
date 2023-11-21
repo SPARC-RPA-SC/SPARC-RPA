@@ -20,7 +20,8 @@
 
 #include "restoreElectronicGroundState.h"
 
-void restore_electronicGroundState(SPARC_OBJ *pSPARC, MPI_Comm nuChi0Eigscomm, MPI_Comm nuChi0EigsBridgeComm, int nuChi0EigscommIndex, int rank0nuChi0EigscommInWorld, double *symk1, double *symk2, double *symk3, int **kPqList) {
+void restore_electronicGroundState(SPARC_OBJ *pSPARC, MPI_Comm nuChi0Eigscomm, MPI_Comm nuChi0EigsBridgeComm, int nuChi0EigscommIndex, int rank0nuChi0EigscommInWorld,
+     double *symk1, double *symk2, double *symk3, int **kPqList, int Nkpts_sym) {
     int rank;
     MPI_Comm_rank(nuChi0Eigscomm, &rank);
     
@@ -149,16 +150,17 @@ void restore_electronicGroundState(SPARC_OBJ *pSPARC, MPI_Comm nuChi0Eigscomm, M
         if (rank == 0) printf("\nCalculating nonlocal projectors in kptcomm_topo took %.3f ms\n",(t2-t1)*1000);   
     #endif
         
-        // restore orbitals psi
+        // restore orbitals psi in every nuChi0Eigscomm
         restore_orbitals(pSPARC, nuChi0Eigscomm, nuChi0EigsBridgeComm, nuChi0EigscommIndex, rank0nuChi0EigscommInWorld, symk1, symk2, symk3, kPqList);
-    }
-
-    // initialize electron density rho (initial guess)
-    restore_electronDensity(pSPARC, nuChi0Eigscomm, nuChi0EigsBridgeComm, nuChi0EigscommIndex, rank0nuChi0EigscommInWorld);
+        
+        restore_electronDensity(pSPARC, nuChi0Eigscomm, nuChi0EigsBridgeComm, nuChi0EigscommIndex, rank0nuChi0EigscommInWorld);
     
+        restore_eigval_occ(pSPARC, nuChi0Eigscomm, nuChi0EigsBridgeComm, nuChi0EigscommIndex, Nkpts_sym, kPqList);
+    }
 }
 
-void restore_orbitals(SPARC_OBJ* pSPARC, MPI_Comm nuChi0Eigscomm, MPI_Comm nuChi0EigsBridgeComm, int nuChi0EigscommIndex, int rank0nuChi0EigscommInWorld, double *symk1, double *symk2, double *symk3, int **kPqList) {
+void restore_orbitals(SPARC_OBJ* pSPARC, MPI_Comm nuChi0Eigscomm, MPI_Comm nuChi0EigsBridgeComm, int nuChi0EigscommIndex, int rank0nuChi0EigscommInWorld,
+     double *symk1, double *symk2, double *symk3, int **kPqList) {
     if ((nuChi0EigscommIndex == -1)) return; // not take part in computation
     int rank;
     MPI_Comm_rank(nuChi0Eigscomm, &rank);
@@ -355,20 +357,25 @@ void restore_electronDensity(SPARC_OBJ* pSPARC, MPI_Comm nuChi0Eigscomm, MPI_Com
 #endif
     
     if (pSPARC->dmcomm_phi != MPI_COMM_NULL) {
+        int phiRank;
+        MPI_Comm_rank(pSPARC->dmcomm_phi, &phiRank);
         int DMnd = pSPARC->Nd_d;
         if (flagPrintNuChi0Eigscomm) { // 0th nuChi0Eigscomm read electron density
             // for 1st Relax step/ MDstep, set initial electron density
             // read initial density from file 
             char inputDensFnames[3][L_STRING+L_PSD];
             // set up input density filename
-            if (rank == 0) {
-                char INPUT_DIR[L_PSD];
-                extract_path_from_file(pSPARC->filename, INPUT_DIR, L_PSD);
-                combine_path_filename(INPUT_DIR, pSPARC->InDensTCubFilename, inputDensFnames[0], L_STRING+L_PSD);
-                combine_path_filename(INPUT_DIR, pSPARC->InDensUCubFilename, inputDensFnames[1], L_STRING+L_PSD);
-                combine_path_filename(INPUT_DIR, pSPARC->InDensDCubFilename, inputDensFnames[2], L_STRING+L_PSD);
+            if (phiRank == 0) {
+                snprintf(inputDensFnames[0], 100, "%s.dens", pSPARC->filename);
+                snprintf(inputDensFnames[1], 100, "%s.densUp", pSPARC->filename);
+                snprintf(inputDensFnames[2], 100, "%s.densDwn", pSPARC->filename);
             }
-            int nFileToRead = pSPARC->densfilecount;
+            int nFileToRead;
+            if (pSPARC->Nspin == 1) { // spin-unpolarized or collinear spin
+                nFileToRead = 1;
+            } else if (pSPARC->Nspin == 2) { // spin-polarized
+                nFileToRead = 3;
+            }
             read_cube_and_dist_vec(
                 pSPARC, inputDensFnames, pSPARC->electronDens, nFileToRead,
                 pSPARC->DMVertices, pSPARC->dmcomm_phi
@@ -380,6 +387,101 @@ void restore_electronDensity(SPARC_OBJ* pSPARC, MPI_Comm nuChi0Eigscomm, MPI_Com
         if (flagPrintNuChi0Eigscomm && (!rank)) {
             int densityIndex = 2;
             printf("I am rank %d in nuChi0Eigscomm %d; the %dth density is %9.6f\n", rank, nuChi0EigscommIndex, densityIndex, pSPARC->electronDens[densityIndex]);
+        }
+    }
+}
+
+void restore_eigval_occ(SPARC_OBJ* pSPARC, MPI_Comm nuChi0Eigscomm, MPI_Comm nuChi0EigsBridgeComm, int nuChi0EigscommIndex, int Nkpts_sym, int **kPqList) {
+    // Nkpts_sym comes from pRPA. At here Nkpts_sym in pSPARC is equal to Nkpt
+    if (nuChi0EigscommIndex == -1) return;
+    int rank;
+    MPI_Comm_rank(nuChi0Eigscomm, &rank);
+    int Ns = pSPARC->Nstates;
+    int Nkpts_kptcomm = pSPARC->Nkpts_kptcomm;
+    int nspin = pSPARC->Nspin;
+    int Nspin_spincomm = pSPARC->Nspin_spincomm;
+    double *coordsKptsSym = (double*)calloc(sizeof(double), 3*Nkpts_sym);
+    double *eigsKptsSym = (double*)calloc(sizeof(double), Ns * Nkpts_sym * nspin);
+    double *occsKptsSym = (double*)calloc(sizeof(double), Ns * Nkpts_sym * nspin);
+    if (nuChi0EigscommIndex == 0) {
+        if (!rank) {
+            char inputEigsFnames[L_STRING+L_PSD];
+            snprintf(inputEigsFnames, 100, "%s.eigen", pSPARC->filename);
+            read_eigval_occ(inputEigsFnames, pSPARC->Nspin, Nkpts_sym, Ns, coordsKptsSym, eigsKptsSym, occsKptsSym);
+            MPI_Bcast(coordsKptsSym, 3*Nkpts_sym, MPI_DOUBLE, 0, nuChi0Eigscomm);
+            MPI_Bcast(eigsKptsSym, Ns * Nkpts_sym * nspin, MPI_DOUBLE, 0, nuChi0Eigscomm);
+            MPI_Bcast(occsKptsSym, Ns * Nkpts_sym * nspin, MPI_DOUBLE, 0, nuChi0Eigscomm);
+        } else {
+            MPI_Bcast(coordsKptsSym, 3*Nkpts_sym, MPI_DOUBLE, 0, nuChi0Eigscomm);
+            MPI_Bcast(eigsKptsSym, Ns * Nkpts_sym * nspin, MPI_DOUBLE, 0, nuChi0Eigscomm);
+            MPI_Bcast(occsKptsSym, Ns * Nkpts_sym * nspin, MPI_DOUBLE, 0, nuChi0Eigscomm);
+        }
+        if (pSPARC->bandcomm_index >= 0 && pSPARC->dmcomm != MPI_COMM_NULL) {
+            find_eigval_occ_spin_kpts(pSPARC, Nkpts_sym, coordsKptsSym, eigsKptsSym, occsKptsSym, kPqList);
+            MPI_Bcast(pSPARC->lambda, Nspin_spincomm*Nkpts_kptcomm*Ns, MPI_DOUBLE, 0, nuChi0EigsBridgeComm);
+            MPI_Bcast(pSPARC->occ, Nspin_spincomm*Nkpts_kptcomm*Ns, MPI_DOUBLE, 0, nuChi0EigsBridgeComm);
+        }
+    } else {
+        if (pSPARC->bandcomm_index >= 0 && pSPARC->dmcomm != MPI_COMM_NULL) {
+            MPI_Bcast(pSPARC->lambda, Nspin_spincomm*Nkpts_kptcomm*Ns, MPI_DOUBLE, 0, nuChi0EigsBridgeComm);
+            MPI_Bcast(pSPARC->occ, Nspin_spincomm*Nkpts_kptcomm*Ns, MPI_DOUBLE, 0, nuChi0EigsBridgeComm);
+        }
+    }
+    free(coordsKptsSym);
+    free(eigsKptsSym);
+    free(occsKptsSym);
+    if ((pSPARC->bandcomm_index >= 0 && pSPARC->dmcomm != MPI_COMM_NULL)) {
+        printf("I am %d in nuChi0Eigscomm %d, my first spin %d, last kpt is %d, the second eig is %f, occ %f\n", rank, nuChi0EigscommIndex, pSPARC->spin_start_indx, pSPARC->kpt_end_indx,
+            pSPARC->lambda[(Nkpts_kptcomm - 1)*Ns + (2 - 1)], pSPARC->occ[(Nkpts_kptcomm - 1)*Ns + (2 - 1)]);
+    }
+}
+
+void read_eigval_occ(char *inputEigsFnames, int Nspin, int Nkpts_sym, int Ns, double *coordsKptsSym, double *eigsKptsSym, double *occsKptsSym) {
+    FILE *eig_fp = fopen(inputEigsFnames, "r");
+    if (eig_fp == NULL) {
+        printf("Cannot open file \"%s\"\n", inputEigsFnames);
+        exit(EXIT_FAILURE);
+    }
+    for (int kptSym = 0; kptSym < Nkpts_sym; kptSym++) {
+        fscanf(eig_fp, "%*[^\n]\n");
+        fscanf(eig_fp, "%*[^(](%lf,%lf,%lf)\n", &coordsKptsSym[kptSym*3], &coordsKptsSym[kptSym*3 + 1], &coordsKptsSym[kptSym*3 + 2]); // kred #1 = (-0.333333,0.250000,0.000000)
+        fscanf(eig_fp, "%*[^\n]\n"); // weight = 0.333333
+        fscanf(eig_fp, "%*[^\n]\n"); // n        eigval                 occ
+        if (Nspin == 1) {
+            for (int bandIndex = 0; bandIndex  < Ns; bandIndex++) {
+                int theBand;
+                fscanf(eig_fp, "%d %lf %lf", &theBand, &eigsKptsSym[kptSym*Ns + bandIndex], &occsKptsSym[kptSym*Ns + bandIndex]);
+                fscanf(eig_fp, "%*[^\n]\n");
+            }
+        } else if (Nspin == 2) {
+            for (int bandIndex = 0; bandIndex  < Ns; bandIndex++) {
+                int theBand;
+                fscanf(eig_fp, "%d %lf %lf %lf %lf", &theBand,
+                     &eigsKptsSym[kptSym*Ns + bandIndex], &occsKptsSym[kptSym*Ns + bandIndex], &eigsKptsSym[Nkpts_sym*Ns + kptSym*Ns + bandIndex], &occsKptsSym[Nkpts_sym*Ns + kptSym*Ns + bandIndex]);
+                fscanf(eig_fp, "%*[^\n]\n");
+            }
+        }
+    }
+    fclose(eig_fp);
+}
+
+void find_eigval_occ_spin_kpts(SPARC_OBJ *pSPARC, int Nkpts_sym, double *coordsKptsSym, double *eigsKptsSym, double *occsKptsSym, int **kPqList) {
+    int Ns = pSPARC->Nstates;
+    int Nkpts_kptcomm = pSPARC->Nkpts_kptcomm;
+    for (int spin = pSPARC->spin_start_indx; spin < pSPARC->spin_end_indx + 1; spin++) {
+        int localSpin = spin - pSPARC->spin_start_indx;
+        for (int kpt = pSPARC->kpt_start_indx; kpt < pSPARC->kpt_end_indx + 1; kpt++) {
+            int kptSym, localKpt;
+            localKpt = kpt - pSPARC->kpt_start_indx;
+            if (kPqList[kpt][0] > 0) {
+                kptSym = kPqList[kpt][0] - 1;
+            } else {
+                kptSym = -kPqList[kpt][0] - 1;
+            }
+            for (int bandIndex = 0; bandIndex < Ns; bandIndex++) {
+                pSPARC->lambda[localSpin*Nkpts_kptcomm*Ns + localKpt*Ns + bandIndex] = eigsKptsSym[spin*Nkpts_sym*Ns + kptSym*Ns + bandIndex];
+                pSPARC->occ[localSpin*Nkpts_kptcomm*Ns + localKpt*Ns + bandIndex] = occsKptsSym[spin*Nkpts_sym*Ns + kptSym*Ns + bandIndex];
+            }
         }
     }
 }
