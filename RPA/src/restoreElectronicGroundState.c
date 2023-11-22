@@ -17,11 +17,14 @@
 #include "orbitalElecDensInit.h"
 #include "orbitalElecDensInit.h"
 #include "tools.h"
+#include "exchangeCorrelation.h"
+#include "sqParallelization.h"
 
 #include "restoreElectronicGroundState.h"
 
 void restore_electronicGroundState(SPARC_OBJ *pSPARC, MPI_Comm nuChi0Eigscomm, MPI_Comm nuChi0EigsBridgeComm, int nuChi0EigscommIndex, int rank0nuChi0EigscommInWorld,
      double *symk1, double *symk2, double *symk3, int **kPqList, int Nkpts_sym) {
+    if (nuChi0EigscommIndex == -1) return; // not take part in computation
     int rank;
     MPI_Comm_rank(nuChi0Eigscomm, &rank);
     
@@ -152,16 +155,54 @@ void restore_electronicGroundState(SPARC_OBJ *pSPARC, MPI_Comm nuChi0Eigscomm, M
         
         // restore orbitals psi in every nuChi0Eigscomm
         restore_orbitals(pSPARC, nuChi0Eigscomm, nuChi0EigsBridgeComm, nuChi0EigscommIndex, rank0nuChi0EigscommInWorld, symk1, symk2, symk3, kPqList);
-        
-        restore_electronDensity(pSPARC, nuChi0Eigscomm, nuChi0EigsBridgeComm, nuChi0EigscommIndex, rank0nuChi0EigscommInWorld);
-    
-        restore_eigval_occ(pSPARC, nuChi0Eigscomm, nuChi0EigsBridgeComm, nuChi0EigscommIndex, Nkpts_sym, kPqList);
     }
+    
+    restore_electronDensity(pSPARC, nuChi0Eigscomm, nuChi0EigsBridgeComm, nuChi0EigscommIndex, rank0nuChi0EigscommInWorld);
+    
+    restore_eigval_occ(pSPARC, nuChi0Eigscomm, nuChi0EigsBridgeComm, nuChi0EigscommIndex, Nkpts_sym, kPqList);
+    
+    int DMnd = pSPARC->Nd_d;
+    int i;
+    // solve the poisson equation for electrostatic potential, "phi"
+    Calculate_elecstPotential(pSPARC);
+
+    #ifdef DEBUG
+    t1 = MPI_Wtime();
+    #endif
+    // calculate xc potential (LDA), "Vxc"
+    Calculate_Vxc(pSPARC);
+    pSPARC->countPotentialCalculate++;
+	#ifdef DEBUG
+    t2 = MPI_Wtime();
+    if (rank == 0) printf("rank = %d, XC calculation took %.3f ms\n", rank, (t2-t1)*1e3); 
+    t1 = MPI_Wtime(); 
+	#endif 
+    
+    // calculate Veff_loc_dmcomm_phi = phi + Vxc in "phi-domain"
+    Calculate_Veff_loc_dmcomm_phi(pSPARC);
+    
+    // initialize mixing_hist_xk (and mixing_hist_xkm1)
+    Update_mixing_hist_xk(pSPARC);
+    
+    if (pSPARC->SQFlag == 1) {
+        for (i = 0; i < pSPARC->Nspden; i++)
+            TransferVeff_phi2sq(pSPARC, pSPARC->Veff_loc_dmcomm_phi + i*DMnd, pSPARC->pSQ->Veff_loc_SQ + i*pSPARC->Nd_d_dmcomm);
+    } else {
+        // transfer Veff_loc from "phi-domain" to "psi-domain"
+        for (i = 0; i < pSPARC->Nspden; i++)
+            Transfer_Veff_loc_RPA(pSPARC, nuChi0Eigscomm, pSPARC->Veff_loc_dmcomm_phi + i*DMnd, pSPARC->Veff_loc_dmcomm + i*pSPARC->Nd_d_dmcomm);
+    }
+    
+    #ifdef DEBUG
+    t2 = MPI_Wtime();
+    if (rank == 0) {
+        printf("rank = %d, Veff calculation and Bcast (non-blocking) took %.3f ms\n",rank,(t2-t1)*1e3); 
+    }
+	#endif
 }
 
 void restore_orbitals(SPARC_OBJ* pSPARC, MPI_Comm nuChi0Eigscomm, MPI_Comm nuChi0EigsBridgeComm, int nuChi0EigscommIndex, int rank0nuChi0EigscommInWorld,
      double *symk1, double *symk2, double *symk3, int **kPqList) {
-    if ((nuChi0EigscommIndex == -1)) return; // not take part in computation
     int rank;
     MPI_Comm_rank(nuChi0Eigscomm, &rank);
     int flagPrintNuChi0Eigscomm = (nuChi0EigscommIndex == 0); // set which nuchi0Eigscomm will print output
@@ -348,7 +389,6 @@ void read_orbitals_distributed_complex_RPA(SPARC_OBJ *pSPARC, int flagSymKpt, in
 }
 
 void restore_electronDensity(SPARC_OBJ* pSPARC, MPI_Comm nuChi0Eigscomm, MPI_Comm nuChi0EigsBridgeComm, int nuChi0EigscommIndex, int rank0nuChi0EigscommInWorld) {
-    if (nuChi0EigscommIndex == -1) return;
     int rank;
     MPI_Comm_rank(nuChi0Eigscomm, &rank);
     int flagPrintNuChi0Eigscomm = (nuChi0EigscommIndex == 0); // set which nuchi0Eigscomm will print output
@@ -393,7 +433,6 @@ void restore_electronDensity(SPARC_OBJ* pSPARC, MPI_Comm nuChi0Eigscomm, MPI_Com
 
 void restore_eigval_occ(SPARC_OBJ* pSPARC, MPI_Comm nuChi0Eigscomm, MPI_Comm nuChi0EigsBridgeComm, int nuChi0EigscommIndex, int Nkpts_sym, int **kPqList) {
     // Nkpts_sym comes from pRPA. At here Nkpts_sym in pSPARC is equal to Nkpt
-    if (nuChi0EigscommIndex == -1) return;
     int rank;
     MPI_Comm_rank(nuChi0Eigscomm, &rank);
     int Ns = pSPARC->Nstates;
@@ -484,4 +523,86 @@ void find_eigval_occ_spin_kpts(SPARC_OBJ *pSPARC, int Nkpts_sym, double *coordsK
             }
         }
     }
+}
+
+/**
+ * @brief   Transfer Veff_loc from phi-domain to psi-domain.
+ *
+ *          Use DD2DD (Domain Decomposition to Domain Decomposition) to 
+ *          do the transmision between phi-domain and the dmcomm that 
+ *          contains root process, and then broadcast to all dmcomms.
+ */
+void Transfer_Veff_loc_RPA(SPARC_OBJ *pSPARC, MPI_Comm nuChi0Eigscomm, double *Veff_phi_domain, double *Veff_psi_domain) 
+{
+#ifdef DEBUG
+    double t1, t2;
+#endif
+    
+    int rank;
+    MPI_Comm_rank(nuChi0Eigscomm, &rank);
+#ifdef DEBUG
+    if (rank == 0) printf("Transmitting Veff_loc from phi-domain to psi-domain (LOCAL) ...\n");
+#endif    
+    //void DD2DD(SPARC_OBJ *pSPARC, int *gridsizes, int *sDMVert, double *sdata, int *rDMVert, double *rdata, 
+    //       MPI_Comm send_comm, int *sdims, MPI_Comm recv_comm, int *rdims)
+    int gridsizes[3], sdims[3], rdims[3];
+    gridsizes[0] = pSPARC->Nx; gridsizes[1] = pSPARC->Ny; gridsizes[2] = pSPARC->Nz;
+    sdims[0] = pSPARC->npNdx_phi; sdims[1] = pSPARC->npNdy_phi; sdims[2] = pSPARC->npNdz_phi;
+    rdims[0] = pSPARC->npNdx; rdims[1] = pSPARC->npNdy; rdims[2] = pSPARC->npNdz;
+
+#ifdef DEBUG
+    t1 = MPI_Wtime();
+#endif
+    D2D(&pSPARC->d2d_dmcomm_phi, &pSPARC->d2d_dmcomm, gridsizes, pSPARC->DMVertices, Veff_phi_domain, 
+        pSPARC->DMVertices_dmcomm, Veff_psi_domain, pSPARC->dmcomm_phi, sdims, 
+        (pSPARC->spincomm_index == 0 && pSPARC->kptcomm_index == 0 && pSPARC->bandcomm_index == 0) ? pSPARC->dmcomm : MPI_COMM_NULL, 
+        rdims, nuChi0Eigscomm, sizeof(double));
+#ifdef DEBUG
+    t2 = MPI_Wtime();
+    if (rank == 0) printf("---Transfer Veff_loc: D2D took %.3f ms\n",(t2-t1)*1e3);
+    t1 = MPI_Wtime();
+#endif
+    
+    // Broadcast phi from the dmcomm that contain root process to all dmcomms of the first kptcomms in each spincomm
+    if (pSPARC->npspin > 1 && pSPARC->spincomm_index >= 0 && pSPARC->kptcomm_index == 0) {
+        MPI_Bcast(Veff_psi_domain, pSPARC->Nd_d_dmcomm, MPI_DOUBLE, 0, pSPARC->spin_bridge_comm);
+    }
+    
+#ifdef DEBUG
+    t2 = MPI_Wtime();
+    if (rank == 0) printf("---Transfer Veff_loc: bcast btw/ spincomms of 1st kptcomm took %.3f ms\n",(t2-t1)*1e3);
+    t1 = MPI_Wtime();
+#endif
+    
+    // Broadcast phi from the dmcomm that contain root process to all dmcomms of the first bandcomms in each kptcomm
+    if (pSPARC->spincomm_index >= 0 && pSPARC->npkpt > 1 && pSPARC->kptcomm_index >= 0 && pSPARC->bandcomm_index == 0 && pSPARC->dmcomm != MPI_COMM_NULL) {
+        MPI_Bcast(Veff_psi_domain, pSPARC->Nd_d_dmcomm, MPI_DOUBLE, 0, pSPARC->kpt_bridge_comm);
+    }
+    
+#ifdef DEBUG
+    t2 = MPI_Wtime();
+    if (rank == 0) printf("---Transfer Veff_loc: bcast btw/ kptcomms of 1st bandcomm took %.3f ms\n",(t2-t1)*1e3);
+#endif
+
+    MPI_Barrier(pSPARC->blacscomm); // experienced severe slowdown of MPI_Bcast below on Quartz cluster, this Barrier fixed the issue (why?)
+
+#ifdef DEBUG
+    t1 = MPI_Wtime();
+#endif
+
+    // Bcast phi from first bandcomm to all other bandcomms
+    if (pSPARC->npband > 1 && pSPARC->kptcomm_index >= 0 && pSPARC->dmcomm != MPI_COMM_NULL) {
+        MPI_Bcast(Veff_psi_domain, pSPARC->Nd_d_dmcomm, MPI_DOUBLE, 0, pSPARC->blacscomm);    
+    }
+    pSPARC->req_veff_loc = MPI_REQUEST_NULL;
+    
+    MPI_Barrier(pSPARC->blacscomm); // experienced severe slowdown of MPI_Bcast above on Quartz cluster, this Barrier fixed the issue (why?)
+
+#ifdef DEBUG
+    t2 = MPI_Wtime();
+    if (rank == 0) printf("---Transfer Veff_loc: mpi_bcast (count = %d) to all bandcomms took %.3f ms\n",pSPARC->Nd_d_dmcomm,(t2-t1)*1e3);
+#endif
+
+    if ((pSPARC->ixc[2]) && (pSPARC->countPotentialCalculate > 1))
+        Transfer_vxcMGGA3_phi_psi(pSPARC, pSPARC->vxcMGGA3, pSPARC->vxcMGGA3_loc_dmcomm); // only transfer the potential they are going to use
 }

@@ -29,6 +29,8 @@ void finalize_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA) {
     // free communicators
     MPI_Comm_free(&pRPA->nuChi0Eigscomm);
     MPI_Comm_free(&pRPA->nuChi0EigsBridgeComm);
-    Free_scfvar(pSPARC);
+    if (pRPA->nuChi0EigscommIndex != -1) {
+        Free_scfvar(pSPARC);
+    }
     Finalize(pSPARC);
 }

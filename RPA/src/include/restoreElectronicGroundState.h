@@ -23,4 +23,6 @@ void restore_eigval_occ(SPARC_OBJ* pSPARC, MPI_Comm nuChi0Eigscomm, MPI_Comm nuC
 void read_eigval_occ(char *inputEigsFnames, int Nspin, int Nkpts_sym, int Nstates, double *coordsKptsSym, double *eigsKptsSym, double *occsKptsSym);
 
 void find_eigval_occ_spin_kpts(SPARC_OBJ *pSPARC, int Nkpts_sym, double *coordsKptsSym, double *eigsKptsSym, double *occsKptsSym, int **kPqList);
+
+void Transfer_Veff_loc_RPA(SPARC_OBJ *pSPARC, MPI_Comm nuChi0Eigscomm, double *Veff_phi_domain, double *Veff_psi_domain);
 #endif

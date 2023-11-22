@@ -70,9 +70,7 @@ int main(int argc, char *argv[]) {
 
     restore_electronicGroundState(&SPARC, RPA.nuChi0Eigscomm, RPA.nuChi0EigsBridgeComm, RPA.nuChi0EigscommIndex, RPA.rank0nuChi0EigscommInWorld, RPA.k1, RPA.k2, RPA.k3, RPA.kPqList, RPA.Nkpts_sym);
 
-    // prepare_Hamiltonian(&SPARC, &RPA); // for generating Veff and Vnl by SPARC, then transferring to RPA
-
-    chebyshev_filtering(&RPA);
+    chebyshev_filtering(&SPARC, &RPA);
 
     print_result(&RPA);
 
