@@ -5,6 +5,6 @@
 
 void chebyshev_filtering(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA);
 
-double test_Hx(SPARC_OBJ *pSPARC);
+void test_Hx(SPARC_OBJ *pSPARC, double *testHxResults);
 
 #endif

@@ -19,6 +19,8 @@
 #include "tools.h"
 #include "exchangeCorrelation.h"
 #include "sqParallelization.h"
+#include "parallelization.h"
+#include "mGGAtauTransferTauVxc.h"
 
 #include "restoreElectronicGroundState.h"
 
@@ -517,9 +519,10 @@ void find_eigval_occ_spin_kpts(SPARC_OBJ *pSPARC, int Nkpts_sym, double *coordsK
             } else {
                 kptSym = -kPqList[kpt][0] - 1;
             }
-            for (int bandIndex = 0; bandIndex < Ns; bandIndex++) {
-                pSPARC->lambda[localSpin*Nkpts_kptcomm*Ns + localKpt*Ns + bandIndex] = eigsKptsSym[spin*Nkpts_sym*Ns + kptSym*Ns + bandIndex];
-                pSPARC->occ[localSpin*Nkpts_kptcomm*Ns + localKpt*Ns + bandIndex] = occsKptsSym[spin*Nkpts_sym*Ns + kptSym*Ns + bandIndex];
+            for (int bandIndex = pSPARC->band_start_indx; bandIndex < pSPARC->band_end_indx + 1; bandIndex++) {
+                int localBand = bandIndex - pSPARC->band_start_indx;
+                pSPARC->lambda[localSpin*Nkpts_kptcomm*Ns + localKpt*Ns + localBand] = eigsKptsSym[spin*Nkpts_sym*Ns + kptSym*Ns + bandIndex];
+                pSPARC->occ[localSpin*Nkpts_kptcomm*Ns + localKpt*Ns + localBand] = occsKptsSym[spin*Nkpts_sym*Ns + kptSym*Ns + bandIndex];
             }
         }
     }
