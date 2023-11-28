@@ -110,6 +110,16 @@ void initialize_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int argc, char* argv[]) {
         write_output_init(pSPARC);
         write_settings(pRPA);
     }
+    if (pSPARC->dmcomm != MPI_COMM_NULL) {
+        pRPA->deltaRhos = (double*)calloc(sizeof(double), pSPARC->Nd_d_dmcomm * pRPA->nNuChi0Eigscomm);
+        if (pSPARC->isGammaPoint) {
+            pRPA->deltaVs = (double*)calloc(sizeof(double), pSPARC->Nd_d_dmcomm * pRPA->nNuChi0Eigscomm);
+            pRPA->deltaPsis = (double*)calloc(sizeof(double), pSPARC->Nd_d_dmcomm * pRPA->nNuChi0Eigscomm);
+        } else {
+            pRPA->deltaVs_kpt = (double _Complex*)calloc(sizeof(double _Complex), pSPARC->Nd_d_dmcomm * pRPA->nNuChi0Eigscomm);
+            pRPA->deltaPsis_kpt = (double _Complex*)calloc(sizeof(double _Complex), pSPARC->Nd_d_dmcomm * 2);
+        }
+    }
 }
 
 void RPA_Input_MPI_create(MPI_Datatype *RPA_INPUT_MPI) {

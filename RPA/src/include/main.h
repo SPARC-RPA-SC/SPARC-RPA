@@ -72,6 +72,12 @@ typedef struct _RPA_OBJ {
     double *k2;
     double *k3;
     int **kPqList;
+    // save \Delta V s, \Delta\psi and \Delta\rho s
+    double *deltaVs; // Its length is pSPARC->Nd_d_dmcomm*nNuChi0Eigscomm
+    double _Complex *deltaVs_kpt; // Its length is pSPARC->Nd_d_dmcomm*nNuChi0Eigscomm
+    double *deltaRhos; // in dmcomm, save sum of \psi_n^*(\Delta\psi_n) over bandcomm n; then AllReduce over bandcomm, kptcomm and spincomm. Its length is pSPARC->Nd_d_dmcomm * nNuChi0Eigscomm
+    double *deltaPsis; // in dmcomm, save (\Delta\psi_n) of the current band, kpt and spin. Its length is pSPARC->Nd_d_dmcomm * nNuChi0Eigscomm
+    double _Complex *deltaPsis_kpt; // in dmcomm, save (\Delta\psi_n) of the current band, kpt, spin and \Delta V. Its length is pSPARC->Nd_d_dmcomm * 2
 } RPA_OBJ;
 
 typedef struct _RPA_INPUT_OBJ {

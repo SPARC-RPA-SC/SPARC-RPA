@@ -15,7 +15,6 @@
 #include "sqProperties.h"
 #include "spinOrbitCoupling.h"
 #include "orbitalElecDensInit.h"
-#include "orbitalElecDensInit.h"
 #include "tools.h"
 #include "exchangeCorrelation.h"
 #include "sqParallelization.h"
@@ -408,14 +407,14 @@ void restore_electronDensity(SPARC_OBJ* pSPARC, MPI_Comm nuChi0Eigscomm, MPI_Com
             char inputDensFnames[3][L_STRING+L_PSD];
             // set up input density filename
             if (phiRank == 0) {
-                snprintf(inputDensFnames[0], 100, "%s.dens", pSPARC->filename);
-                snprintf(inputDensFnames[1], 100, "%s.densUp", pSPARC->filename);
-                snprintf(inputDensFnames[2], 100, "%s.densDwn", pSPARC->filename);
+                snprintf(inputDensFnames[0], L_STRING+L_PSD, "%s.dens", pSPARC->filename);
+                snprintf(inputDensFnames[1], L_STRING+L_PSD, "%s.densUp", pSPARC->filename);
+                snprintf(inputDensFnames[2], L_STRING+L_PSD, "%s.densDwn", pSPARC->filename);
             }
             int nFileToRead;
             if (pSPARC->Nspin == 1) { // spin-unpolarized or collinear spin
                 nFileToRead = 1;
-            } else if (pSPARC->Nspin == 2) { // spin-polarized
+            } else { // spin-polarized
                 nFileToRead = 3;
             }
             read_cube_and_dist_vec(
