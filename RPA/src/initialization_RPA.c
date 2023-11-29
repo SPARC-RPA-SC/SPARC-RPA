@@ -41,7 +41,14 @@ void initialize_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int argc, char* argv[]) {
         pSPARC->time_start = t1;
     }
     Initialize_SPARC_before_SetComm(pSPARC, argc, argv); // include cell size, lattice vectors, mesh size and k-point grid, reading ion file & pseudopotentials
-    // the communicators in pSPARC will be rebuild
+    pRPA->deltaRhos = NULL;
+    pRPA->deltaVs = NULL;
+    pRPA->initDeltaVs = NULL;
+    pRPA->deltaPsis = NULL;
+    pRPA->deltaRhos_kpt = NULL;
+    pRPA->deltaVs_kpt = NULL;
+    pRPA->initDeltaVs_kpt = NULL;
+    pRPA->deltaPsis_kpt = NULL;
     pRPA->Nkpts_sym = pSPARC->Nkpts_sym;
     pRPA->kptWts = (double *)malloc(pRPA->Nkpts_sym * sizeof(double));
     pRPA->k1 = (double *)malloc(pRPA->Nkpts_sym * sizeof(double));
@@ -110,12 +117,21 @@ void initialize_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int argc, char* argv[]) {
         write_output_init(pSPARC);
         write_settings(pRPA);
     }
-    if (pSPARC->dmcomm != MPI_COMM_NULL) {
-        pRPA->deltaRhos = (double*)calloc(sizeof(double), pSPARC->Nd_d_dmcomm * pRPA->nNuChi0Eigscomm);
+    if (pSPARC->dmcomm_phi != MPI_COMM_NULL) {
         if (pSPARC->isGammaPoint) {
+            pRPA->initDeltaVs = (double*)calloc(sizeof(double), pSPARC->Nd_d);
+        } else {
+            pRPA->initDeltaVs_kpt = (double _Complex*)calloc(sizeof(double _Complex), pSPARC->Nd_d);
+        }
+    }
+    int flagNoDmcomm = (pSPARC->spincomm_index < 0 || pSPARC->kptcomm_index < 0 || pSPARC->bandcomm_index < 0 || pSPARC->dmcomm == MPI_COMM_NULL);
+    if (!flagNoDmcomm) {
+        if (pSPARC->isGammaPoint) {
+            pRPA->deltaRhos = (double*)calloc(sizeof(double), pSPARC->Nd_d_dmcomm * pRPA->nNuChi0Eigscomm);
             pRPA->deltaVs = (double*)calloc(sizeof(double), pSPARC->Nd_d_dmcomm * pRPA->nNuChi0Eigscomm);
             pRPA->deltaPsis = (double*)calloc(sizeof(double), pSPARC->Nd_d_dmcomm * pRPA->nNuChi0Eigscomm);
         } else {
+            pRPA->deltaRhos_kpt = (double _Complex*)calloc(sizeof(double _Complex), pSPARC->Nd_d_dmcomm * pRPA->nNuChi0Eigscomm);
             pRPA->deltaVs_kpt = (double _Complex*)calloc(sizeof(double _Complex), pSPARC->Nd_d_dmcomm * pRPA->nNuChi0Eigscomm);
             pRPA->deltaPsis_kpt = (double _Complex*)calloc(sizeof(double _Complex), pSPARC->Nd_d_dmcomm * 2);
         }

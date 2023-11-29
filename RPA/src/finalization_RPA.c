@@ -30,12 +30,15 @@ void finalize_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA) {
     MPI_Comm_free(&pRPA->nuChi0Eigscomm);
     MPI_Comm_free(&pRPA->nuChi0EigsBridgeComm);
     if (pRPA->nuChi0EigscommIndex != -1) {
-        free(pRPA->deltaRhos);
         if (pSPARC->isGammaPoint) {
+            free(pRPA->deltaRhos);
             free(pRPA->deltaVs);
+            free(pRPA->initDeltaVs);
             free(pRPA->deltaPsis);
         } else {
+            free(pRPA->deltaRhos_kpt);
             free(pRPA->deltaVs_kpt);
+            free(pRPA->initDeltaVs_kpt);
             free(pRPA->deltaPsis_kpt);
         }
         Free_scfvar(pSPARC);

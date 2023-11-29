@@ -4,8 +4,10 @@
 #include <mpi.h>
 
 #include "hamiltonianVecRoutines.h"
+#include "tools.h"
 
 #include "main.h"
+#include "restoreElectronicGroundState.h"
 #include "chebyshevFiltering.h"
 
 void chebyshev_filtering(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA) {
@@ -14,18 +16,19 @@ void chebyshev_filtering(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA) {
     MPI_Comm nuChi0Eigscomm = pRPA->nuChi0Eigscomm;
     int rank;
     MPI_Comm_rank(nuChi0Eigscomm, &rank);
-    // Sternheimer equation should be solved in RPA_OBJ, in other words, it should not use pSPARC.
-    // To generate Hamiltonian in RPA domain topologies, it is necessary to generate Laplacian*Vec independent of pSPARC.
-    // Then it can be called easily by any other feature. The transformation is done in function prepare_Hamiltonian(&SPARC, &RPA)
-    if (pSPARC->dmcomm != MPI_COMM_NULL) {
-        double *testHxAccuracy = (double*)calloc(sizeof(double), pSPARC->Nkpts_kptcomm*pSPARC->Nspin_spincomm*pSPARC->Nband_bandcomm);
-        test_Hx(pSPARC, testHxAccuracy);
-        if (nuChi0EigscommIndex == pRPA->npnuChi0Neig - 1) {
-            printf("rank %d in nuChi0Eigscomm %d, the relative error epsilon*psi - H*psi of the first two bands are %.6E %.6E\n", rank, nuChi0EigscommIndex,
-                 testHxAccuracy[0], testHxAccuracy[1]);
-        }
-        free(testHxAccuracy);
+
+    initialize_deltaVs(pSPARC, pRPA);
+    int flagNoDmcomm = (pSPARC->spincomm_index < 0 || pSPARC->kptcomm_index < 0 || pSPARC->bandcomm_index < 0 || pSPARC->dmcomm == MPI_COMM_NULL);
+    if (flagNoDmcomm) return;
+
+    double *testHxAccuracy = (double*)calloc(sizeof(double), pSPARC->Nkpts_kptcomm*pSPARC->Nspin_spincomm*pSPARC->Nband_bandcomm);
+    test_Hx(pSPARC, testHxAccuracy);
+    if (nuChi0EigscommIndex == pRPA->npnuChi0Neig - 1) {
+        printf("rank %d in nuChi0Eigscomm %d, the relative error epsilon*psi - H*psi of the first two bands are %.6E %.6E\n", rank, nuChi0EigscommIndex,
+             testHxAccuracy[0], testHxAccuracy[1]);
     }
+    free(testHxAccuracy);
+
     if ((nuChi0EigscommIndex == pRPA->npnuChi0Neig - 1) && (pSPARC->dmcomm != MPI_COMM_NULL)) { // this test is done in only one nuChi0Eigscomm
         int qptIndex = 1;
         int omegaIndex = 0;
@@ -34,6 +37,27 @@ void chebyshev_filtering(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA) {
         double *sternSolverAccuracy = (double*)calloc(sizeof(double), pSPARC->Nkpts_kptcomm*pSPARC->Nspin_spincomm*pSPARC->Nband_bandcomm);
         test_chi0_times_deltaV(pSPARC, pRPA, qptIndex, omegaIndex, sternSolverAccuracy);
         free(sternSolverAccuracy);
+    }
+}
+
+void initialize_deltaVs(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA) {
+    int gridsizes[3] = {pSPARC->Nx, pSPARC->Ny, pSPARC->Nz};
+    int Nd = pSPARC->Nx * pSPARC->Ny * pSPARC->Nz;
+    int seed_offset = 0;
+    if (pSPARC->isGammaPoint) {
+        for (int i = 0; i < pRPA->nNuChi0Eigscomm; i++) {
+            if (pSPARC->dmcomm_phi != MPI_COMM_NULL) {
+                SeededRandVec(pRPA->initDeltaVs, pSPARC->DMVertices, gridsizes, -0.5, 0.5, seed_offset + Nd*(pRPA->nuChi0EigsStartIndex + i)); // deltaVs vectors are not normalized.
+            }
+            Transfer_Veff_loc_RPA(pSPARC, pRPA->nuChi0Eigscomm, pRPA->initDeltaVs, pRPA->deltaVs + i*pSPARC->Nd_d_dmcomm); // it tansfer \Delta V at here 
+        }
+    } else {
+        for (int i = 0; i < pRPA->nNuChi0Eigscomm; i++) {
+            if (pSPARC->dmcomm_phi != MPI_COMM_NULL) {
+                SeededRandVec_complex(pRPA->initDeltaVs_kpt, pSPARC->DMVertices, gridsizes, -0.5, 0.5, seed_offset + Nd*(pRPA->nuChi0EigsStartIndex + i)); // deltaVs vectors are not normalized.
+            }
+            Transfer_Veff_loc_RPA_kpt(pSPARC, pRPA->nuChi0Eigscomm, pRPA->initDeltaVs_kpt, pRPA->deltaVs_kpt + i*pSPARC->Nd_d_dmcomm);
+        }
     }
 }
 

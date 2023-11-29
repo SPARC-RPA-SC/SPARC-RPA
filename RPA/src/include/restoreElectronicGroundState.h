@@ -25,4 +25,6 @@ void read_eigval_occ(char *inputEigsFnames, int Nspin, int Nkpts_sym, int Nstate
 void find_eigval_occ_spin_kpts(SPARC_OBJ *pSPARC, int Nkpts_sym, double *coordsKptsSym, double *eigsKptsSym, double *occsKptsSym, int **kPqList);
 
 void Transfer_Veff_loc_RPA(SPARC_OBJ *pSPARC, MPI_Comm nuChi0Eigscomm, double *Veff_phi_domain, double *Veff_psi_domain);
+
+void Transfer_Veff_loc_RPA_kpt(SPARC_OBJ *pSPARC, MPI_Comm nuChi0Eigscomm, double _Complex *Veff_phi_domain, double _Complex *Veff_psi_domain);
 #endif

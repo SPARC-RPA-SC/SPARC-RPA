@@ -608,3 +608,82 @@ void Transfer_Veff_loc_RPA(SPARC_OBJ *pSPARC, MPI_Comm nuChi0Eigscomm, double *V
     if ((pSPARC->ixc[2]) && (pSPARC->countPotentialCalculate > 1))
         Transfer_vxcMGGA3_phi_psi(pSPARC, pSPARC->vxcMGGA3, pSPARC->vxcMGGA3_loc_dmcomm); // only transfer the potential they are going to use
 }
+
+/**
+ * @brief   Transfer deltaV_kpt from phi-domain to psi-domain.
+ *
+ *          Use DD2DD (Domain Decomposition to Domain Decomposition) to 
+ *          do the transmision between phi-domain and the dmcomm that 
+ *          contains root process, and then broadcast to all dmcomms.
+ */
+void Transfer_Veff_loc_RPA_kpt(SPARC_OBJ *pSPARC, MPI_Comm nuChi0Eigscomm, double _Complex *Veff_phi_domain, double _Complex *Veff_psi_domain) 
+{
+#ifdef DEBUG
+    double t1, t2;
+#endif
+    
+    int rank;
+    MPI_Comm_rank(nuChi0Eigscomm, &rank);
+#ifdef DEBUG
+    if (rank == 0) printf("Transmitting deltaV_kpt from phi-domain to psi-domain (LOCAL) ...\n");
+#endif    
+    //void DD2DD(SPARC_OBJ *pSPARC, int *gridsizes, int *sDMVert, double *sdata, int *rDMVert, double *rdata, 
+    //       MPI_Comm send_comm, int *sdims, MPI_Comm recv_comm, int *rdims)
+    int gridsizes[3], sdims[3], rdims[3];
+    gridsizes[0] = pSPARC->Nx; gridsizes[1] = pSPARC->Ny; gridsizes[2] = pSPARC->Nz;
+    sdims[0] = pSPARC->npNdx_phi; sdims[1] = pSPARC->npNdy_phi; sdims[2] = pSPARC->npNdz_phi;
+    rdims[0] = pSPARC->npNdx; rdims[1] = pSPARC->npNdy; rdims[2] = pSPARC->npNdz;
+
+#ifdef DEBUG
+    t1 = MPI_Wtime();
+#endif
+    D2D(&pSPARC->d2d_dmcomm_phi, &pSPARC->d2d_dmcomm, gridsizes, pSPARC->DMVertices, Veff_phi_domain, 
+        pSPARC->DMVertices_dmcomm, Veff_psi_domain, pSPARC->dmcomm_phi, sdims, 
+        (pSPARC->spincomm_index == 0 && pSPARC->kptcomm_index == 0 && pSPARC->bandcomm_index == 0) ? pSPARC->dmcomm : MPI_COMM_NULL, 
+        rdims, nuChi0Eigscomm, sizeof(double _Complex));
+#ifdef DEBUG
+    t2 = MPI_Wtime();
+    if (rank == 0) printf("---Transfer deltaV_kpt: D2D took %.3f ms\n",(t2-t1)*1e3);
+    t1 = MPI_Wtime();
+#endif
+    
+    // Broadcast phi from the dmcomm that contain root process to all dmcomms of the first kptcomms in each spincomm
+    if (pSPARC->npspin > 1 && pSPARC->spincomm_index >= 0 && pSPARC->kptcomm_index == 0) {
+        MPI_Bcast(Veff_psi_domain, pSPARC->Nd_d_dmcomm, MPI_DOUBLE_COMPLEX, 0, pSPARC->spin_bridge_comm);
+    }
+    
+#ifdef DEBUG
+    t2 = MPI_Wtime();
+    if (rank == 0) printf("---Transfer deltaV_kpt: bcast btw/ spincomms of 1st kptcomm took %.3f ms\n",(t2-t1)*1e3);
+    t1 = MPI_Wtime();
+#endif
+    
+    // Broadcast phi from the dmcomm that contain root process to all dmcomms of the first bandcomms in each kptcomm
+    if (pSPARC->spincomm_index >= 0 && pSPARC->npkpt > 1 && pSPARC->kptcomm_index >= 0 && pSPARC->bandcomm_index == 0 && pSPARC->dmcomm != MPI_COMM_NULL) {
+        MPI_Bcast(Veff_psi_domain, pSPARC->Nd_d_dmcomm, MPI_DOUBLE_COMPLEX, 0, pSPARC->kpt_bridge_comm);
+    }
+    
+#ifdef DEBUG
+    t2 = MPI_Wtime();
+    if (rank == 0) printf("---Transfer deltaV_kpt: bcast btw/ kptcomms of 1st bandcomm took %.3f ms\n",(t2-t1)*1e3);
+#endif
+
+    MPI_Barrier(pSPARC->blacscomm); // experienced severe slowdown of MPI_Bcast below on Quartz cluster, this Barrier fixed the issue (why?)
+
+#ifdef DEBUG
+    t1 = MPI_Wtime();
+#endif
+
+    // Bcast phi from first bandcomm to all other bandcomms
+    if (pSPARC->npband > 1 && pSPARC->kptcomm_index >= 0 && pSPARC->dmcomm != MPI_COMM_NULL) {
+        MPI_Bcast(Veff_psi_domain, pSPARC->Nd_d_dmcomm, MPI_DOUBLE_COMPLEX, 0, pSPARC->blacscomm);    
+    }
+    pSPARC->req_veff_loc = MPI_REQUEST_NULL;
+    
+    MPI_Barrier(pSPARC->blacscomm); // experienced severe slowdown of MPI_Bcast above on Quartz cluster, this Barrier fixed the issue (why?)
+
+#ifdef DEBUG
+    t2 = MPI_Wtime();
+    if (rank == 0) printf("---Transfer deltaV_kpt: mpi_bcast (count = %d) to all bandcomms took %.3f ms\n",pSPARC->Nd_d_dmcomm,(t2-t1)*1e3);
+#endif
+}

@@ -5,6 +5,8 @@
 
 void chebyshev_filtering(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA);
 
+void initialize_deltaVs(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA);
+
 void test_Hx(SPARC_OBJ *pSPARC, double *testHxResults);
 
 void test_chi0_times_deltaV(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int omegaIndex, double *sternSolverAccuracy);
