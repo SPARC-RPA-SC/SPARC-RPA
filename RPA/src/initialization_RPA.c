@@ -78,12 +78,16 @@ void initialize_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int argc, char* argv[]) {
     pRPA->q2 = (double *)malloc(pRPA->Nqpts_sym * sizeof(double));
     pRPA->q3 = (double *)malloc(pRPA->Nqpts_sym * sizeof(double));
     pRPA->Nqpts_sym = set_qpoints(pRPA->qptWts, pRPA->q1, pRPA->q2, pRPA->q3, pSPARC->Kx, pSPARC->Ky, pSPARC->Kz, pSPARC->range_x, pSPARC->range_y, pSPARC->range_z);
-    pRPA->kPqList = (int **)malloc(pSPARC->Nkpts_sym * sizeof(int*)); // pSPARC saves k-point complete grid, no symmetry. pSPARC->Nkpts_sym = pSPARC->Nkpts
+    pRPA->kPqSymList = (int **)malloc(pSPARC->Nkpts_sym * sizeof(int*)); // pSPARC saves k-point complete grid, no symmetry. pSPARC->Nkpts_sym = pSPARC->Nkpts
+    pRPA->kPqList = (int**)malloc(pSPARC->Nkpts_sym * sizeof(int*));
+    pRPA->kMqList = (int**)malloc(pSPARC->Nkpts_sym * sizeof(int*));
     for (int nk = 0; nk < pSPARC->Nkpts_sym; nk++) {
-        pRPA->kPqList[nk] = (int*)malloc((pRPA->Nqpts_sym + 1) * sizeof(int));
+        pRPA->kPqSymList[nk] = (int*)malloc((pRPA->Nqpts_sym + 1) * sizeof(int));
+        pRPA->kPqList[nk] = (int*)malloc(pRPA->Nqpts_sym * sizeof(int));
+        pRPA->kMqList[nk] = (int*)malloc(pRPA->Nqpts_sym * sizeof(int));
     }
-    set_kPq_lists(pRPA->Nkpts_sym, pRPA->k1, pRPA->k2, pRPA->k3, pSPARC->Nkpts_sym, pSPARC->k1, pSPARC->k2, pSPARC->k3, 
-        pRPA->Nqpts_sym, pRPA->q1, pRPA->q2, pRPA->q3, pSPARC->range_x, pSPARC->range_y, pSPARC->range_z, pRPA->kPqList);
+    set_kPq_kMq_lists(pRPA->Nkpts_sym, pRPA->k1, pRPA->k2, pRPA->k3, pSPARC->Nkpts_sym, pSPARC->k1, pSPARC->k2, pSPARC->k3, 
+        pRPA->Nqpts_sym, pRPA->q1, pRPA->q2, pRPA->q3, pSPARC->range_x, pSPARC->range_y, pSPARC->range_z, pRPA->kPqSymList, pRPA->kPqList, pRPA->kMqList);
     // set integration point omegas
     pRPA->omega = (double *)malloc(pRPA->Nomega * sizeof(double));
     pRPA->omega01 = (double *)malloc(pRPA->Nomega * sizeof(double));

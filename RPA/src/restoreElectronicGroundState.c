@@ -24,7 +24,7 @@
 #include "restoreElectronicGroundState.h"
 
 void restore_electronicGroundState(SPARC_OBJ *pSPARC, MPI_Comm nuChi0Eigscomm, MPI_Comm nuChi0EigsBridgeComm, int nuChi0EigscommIndex, int rank0nuChi0EigscommInWorld,
-     double *symk1, double *symk2, double *symk3, int **kPqList, int Nkpts_sym) {
+     double *symk1, double *symk2, double *symk3, int **kPqSymList, int Nkpts_sym) {
     if (nuChi0EigscommIndex == -1) return; // not take part in computation
     int rank;
     MPI_Comm_rank(nuChi0Eigscomm, &rank);
@@ -155,12 +155,12 @@ void restore_electronicGroundState(SPARC_OBJ *pSPARC, MPI_Comm nuChi0Eigscomm, M
     #endif
         
         // restore orbitals psi in every nuChi0Eigscomm
-        restore_orbitals(pSPARC, nuChi0Eigscomm, nuChi0EigsBridgeComm, nuChi0EigscommIndex, rank0nuChi0EigscommInWorld, symk1, symk2, symk3, kPqList);
+        restore_orbitals(pSPARC, nuChi0Eigscomm, nuChi0EigsBridgeComm, nuChi0EigscommIndex, rank0nuChi0EigscommInWorld, symk1, symk2, symk3, kPqSymList);
     }
     
     restore_electronDensity(pSPARC, nuChi0Eigscomm, nuChi0EigsBridgeComm, nuChi0EigscommIndex, rank0nuChi0EigscommInWorld);
     
-    restore_eigval_occ(pSPARC, nuChi0Eigscomm, nuChi0EigsBridgeComm, nuChi0EigscommIndex, Nkpts_sym, kPqList);
+    restore_eigval_occ(pSPARC, nuChi0Eigscomm, nuChi0EigsBridgeComm, nuChi0EigscommIndex, Nkpts_sym, kPqSymList);
     
     int DMnd = pSPARC->Nd_d;
     int i;
@@ -203,7 +203,7 @@ void restore_electronicGroundState(SPARC_OBJ *pSPARC, MPI_Comm nuChi0Eigscomm, M
 }
 
 void restore_orbitals(SPARC_OBJ* pSPARC, MPI_Comm nuChi0Eigscomm, MPI_Comm nuChi0EigsBridgeComm, int nuChi0EigscommIndex, int rank0nuChi0EigscommInWorld,
-     double *symk1, double *symk2, double *symk3, int **kPqList) {
+     double *symk1, double *symk2, double *symk3, int **kPqSymList) {
     int rank;
     MPI_Comm_rank(nuChi0Eigscomm, &rank);
     int flagPrintNuChi0Eigscomm = (nuChi0EigscommIndex == 0); // set which nuchi0Eigscomm will print output
@@ -259,7 +259,7 @@ void restore_orbitals(SPARC_OBJ* pSPARC, MPI_Comm nuChi0Eigscomm, MPI_Comm nuChi
         t1 = MPI_Wtime();
 #endif                
         if (nuChi0EigscommIndex == 0) { // read orbitals, then broadcast through nuChi0EigsBridgeCommIndex
-            read_orbitals_distributed_kpt_RPA(pSPARC, nuChi0Eigscomm, symk1, symk2, symk3, kPqList); // read orbitals of kpts
+            read_orbitals_distributed_kpt_RPA(pSPARC, nuChi0Eigscomm, symk1, symk2, symk3, kPqSymList); // read orbitals of kpts
             if (pSPARC->dmcomm != MPI_COMM_NULL) {
                 MPI_Bcast(pSPARC->Xorb_kpt, len_tot, MPI_DOUBLE_COMPLEX, 0, nuChi0EigsBridgeComm);
             }
@@ -271,7 +271,7 @@ void restore_orbitals(SPARC_OBJ* pSPARC, MPI_Comm nuChi0Eigscomm, MPI_Comm nuChi
         if (pSPARC->dmcomm != MPI_COMM_NULL) {
             int XorbIndex = 2;
             printf("I am rank %d in nuChi0Eigscomm %d, start k %d, |%d| - 1 in sym kpt list, pSPARC->Xorb[%d] is %.6E + %.6Ei\n", rank, nuChi0EigscommIndex,
-                 pSPARC->kpt_start_indx, kPqList[pSPARC->kpt_start_indx][0], XorbIndex, creal(pSPARC->Xorb_kpt[XorbIndex]),  cimag(pSPARC->Xorb_kpt[XorbIndex]));
+                 pSPARC->kpt_start_indx, kPqSymList[pSPARC->kpt_start_indx][0], XorbIndex, creal(pSPARC->Xorb_kpt[XorbIndex]),  cimag(pSPARC->Xorb_kpt[XorbIndex]));
         }
     }        
 #ifdef DEBUG
@@ -316,7 +316,7 @@ void read_orbitals_distributed_real_RPA(SPARC_OBJ *pSPARC, int band, int spin, M
     MPI_File_close(&orbitalFh);
 }
 
-void read_orbitals_distributed_kpt_RPA(SPARC_OBJ *pSPARC, MPI_Comm nuChi0Eigscomm, double *symk1, double *symk2, double *symk3, int **kPqList) {
+void read_orbitals_distributed_kpt_RPA(SPARC_OBJ *pSPARC, MPI_Comm nuChi0Eigscomm, double *symk1, double *symk2, double *symk3, int **kPqSymList) {
     if (pSPARC->dmcomm != MPI_COMM_NULL) { // only dmcomm != NULL, the processor can join read; in this section, read only orbitals belonging to kpts inside symmetric kpt list
         int spin, kpt, kptSym, band;
         int gridsizes[3]; // z, y, x
@@ -330,8 +330,8 @@ void read_orbitals_distributed_kpt_RPA(SPARC_OBJ *pSPARC, MPI_Comm nuChi0Eigscom
         MPI_Type_create_subarray(3, gridsizes, localGridsizes, localGridStart, MPI_ORDER_C, dataType, &domainSubarray);
         MPI_Type_commit(&domainSubarray);
         for (kpt = pSPARC->kpt_start_indx; kpt < pSPARC->kpt_end_indx + 1; kpt++) {
-            if (kPqList[kpt][0] < 0) continue; // this kpt is not in symmetric kpt list
-            kptSym = kPqList[kpt][0] - 1;
+            if (kPqSymList[kpt][0] < 0) continue; // this kpt is not in symmetric kpt list
+            kptSym = kPqSymList[kpt][0] - 1;
             for (band = pSPARC->band_start_indx; band < pSPARC->band_end_indx + 1; band++) {
                 for (spin = pSPARC->spin_start_indx; spin < pSPARC->spin_end_indx + 1; spin++) {
                         read_orbitals_distributed_complex_RPA(pSPARC, 1, kpt, symk1[kptSym], symk2[kptSym], symk3[kptSym], band, spin, domainSubarray, pSPARC->Xorb_kpt);
@@ -354,8 +354,8 @@ void read_orbitals_distributed_kpt_RPA(SPARC_OBJ *pSPARC, MPI_Comm nuChi0Eigscom
         MPI_Type_create_subarray(3, gridsizes, localGridsizes, localGridStart, MPI_ORDER_C, dataType, &domainSubarray);
         MPI_Type_commit(&domainSubarray);
         for (kpt = pSPARC->kpt_start_indx; kpt < pSPARC->kpt_end_indx + 1; kpt++) {
-            if (kPqList[kpt][0] >= 0) continue; // this kpt is not in symmetric kpt list
-            kptSym = -kPqList[kpt][0] - 1;
+            if (kPqSymList[kpt][0] >= 0) continue; // this kpt is not in symmetric kpt list
+            kptSym = -kPqSymList[kpt][0] - 1;
             for (band = pSPARC->band_start_indx; band < pSPARC->band_end_indx + 1; band++) {
                 for (spin = pSPARC->spin_start_indx; spin < pSPARC->spin_end_indx + 1; spin++) {
                     read_orbitals_distributed_complex_RPA(pSPARC, 0, kpt, symk1[kptSym], symk2[kptSym], symk3[kptSym], band, spin, domainSubarray, pSPARC->Xorb_kpt);
@@ -432,7 +432,7 @@ void restore_electronDensity(SPARC_OBJ* pSPARC, MPI_Comm nuChi0Eigscomm, MPI_Com
     }
 }
 
-void restore_eigval_occ(SPARC_OBJ* pSPARC, MPI_Comm nuChi0Eigscomm, MPI_Comm nuChi0EigsBridgeComm, int nuChi0EigscommIndex, int Nkpts_sym, int **kPqList) {
+void restore_eigval_occ(SPARC_OBJ* pSPARC, MPI_Comm nuChi0Eigscomm, MPI_Comm nuChi0EigsBridgeComm, int nuChi0EigscommIndex, int Nkpts_sym, int **kPqSymList) {
     // Nkpts_sym comes from pRPA. At here Nkpts_sym in pSPARC is equal to Nkpt
     int rank;
     MPI_Comm_rank(nuChi0Eigscomm, &rank);
@@ -457,7 +457,7 @@ void restore_eigval_occ(SPARC_OBJ* pSPARC, MPI_Comm nuChi0Eigscomm, MPI_Comm nuC
             MPI_Bcast(occsKptsSym, Ns * Nkpts_sym * nspin, MPI_DOUBLE, 0, nuChi0Eigscomm);
         }
         if (pSPARC->bandcomm_index >= 0 && pSPARC->dmcomm != MPI_COMM_NULL) {
-            find_eigval_occ_spin_kpts(pSPARC, Nkpts_sym, coordsKptsSym, eigsKptsSym, occsKptsSym, kPqList);
+            find_eigval_occ_spin_kpts(pSPARC, Nkpts_sym, coordsKptsSym, eigsKptsSym, occsKptsSym, kPqSymList);
             MPI_Bcast(pSPARC->lambda, Nspin_spincomm*Nkpts_kptcomm*Ns, MPI_DOUBLE, 0, nuChi0EigsBridgeComm);
             MPI_Bcast(pSPARC->occ, Nspin_spincomm*Nkpts_kptcomm*Ns, MPI_DOUBLE, 0, nuChi0EigsBridgeComm);
         }
@@ -505,7 +505,7 @@ void read_eigval_occ(char *inputEigsFnames, int Nspin, int Nkpts_sym, int Ns, do
     fclose(eig_fp);
 }
 
-void find_eigval_occ_spin_kpts(SPARC_OBJ *pSPARC, int Nkpts_sym, double *coordsKptsSym, double *eigsKptsSym, double *occsKptsSym, int **kPqList) {
+void find_eigval_occ_spin_kpts(SPARC_OBJ *pSPARC, int Nkpts_sym, double *coordsKptsSym, double *eigsKptsSym, double *occsKptsSym, int **kPqSymList) {
     int Ns = pSPARC->Nstates;
     int Nkpts_kptcomm = pSPARC->Nkpts_kptcomm;
     for (int spin = pSPARC->spin_start_indx; spin < pSPARC->spin_end_indx + 1; spin++) {
@@ -513,10 +513,10 @@ void find_eigval_occ_spin_kpts(SPARC_OBJ *pSPARC, int Nkpts_sym, double *coordsK
         for (int kpt = pSPARC->kpt_start_indx; kpt < pSPARC->kpt_end_indx + 1; kpt++) {
             int kptSym, localKpt;
             localKpt = kpt - pSPARC->kpt_start_indx;
-            if (kPqList[kpt][0] > 0) {
-                kptSym = kPqList[kpt][0] - 1;
+            if (kPqSymList[kpt][0] > 0) {
+                kptSym = kPqSymList[kpt][0] - 1;
             } else {
-                kptSym = -kPqList[kpt][0] - 1;
+                kptSym = -kPqSymList[kpt][0] - 1;
             }
             for (int bandIndex = pSPARC->band_start_indx; bandIndex < pSPARC->band_end_indx + 1; bandIndex++) {
                 int localBand = bandIndex - pSPARC->band_start_indx;

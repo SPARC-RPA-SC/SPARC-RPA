@@ -19,9 +19,13 @@ void finalize_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA) {
     free(pRPA->q2);
     free(pRPA->q3);
     for (int nk = 0; nk < pSPARC->Nkpts_sym; nk++) {
+        free(pRPA->kPqSymList[nk]);
         free(pRPA->kPqList[nk]);
+        free(pRPA->kMqList[nk]);
     }
+    free(pRPA->kPqSymList);
     free(pRPA->kPqList);
+    free(pRPA->kMqList);
     // free omega
     free(pRPA->omega);
     free(pRPA->omega01);

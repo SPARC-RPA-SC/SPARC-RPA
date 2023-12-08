@@ -71,7 +71,9 @@ typedef struct _RPA_OBJ {
     double *k1;
     double *k2;
     double *k3;
+    int **kPqSymList;
     int **kPqList;
+    int **kMqList;
     // save \Delta V s, \Delta\psi and \Delta\rho s
     double *initDeltaVs;
     double _Complex *initDeltaVs_kpt;

@@ -107,7 +107,7 @@ void test_Hx(SPARC_OBJ *pSPARC, double *testHxAccuracy) { // make a test to see 
     }
 }
 
-// void test_chi0_times_deltaV(SPARC_OBJ *pSPARC, int **kPqList, int qptIndex, double omega, double _Complex *deltaPsis_kpt, double _Complex *deltaVs_kpt, int nuChi0EigsAmount, double *sternSolverAccuracy) {
+// void test_chi0_times_deltaV(SPARC_OBJ *pSPARC, int **kPqSymList, int qptIndex, double omega, double _Complex *deltaPsis_kpt, double _Complex *deltaVs_kpt, int nuChi0EigsAmount, double *sternSolverAccuracy) {
 void test_chi0_times_deltaV(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int omegaIndex, double *sternSolverAccuracy) {
     int nuChi0EigsAmounts = 1;
     int DMndsp = pSPARC->Nd_d_dmcomm * pSPARC->Nspinor_spincomm;
@@ -127,12 +127,12 @@ void test_chi0_times_deltaV(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int 
             int sg  = pSPARC->spin_start_indx + spn_i;
             for (int kpt = 0; kpt < Nkpts_kptcomm; kpt++) {
                 int kg = kpt + pSPARC->kpt_start_indx;
-                int kPqSym = pRPA->kPqList[kg][qptIndex];
-                int kPq = find_kPq(pSPARC->Nkpts, pRPA->kPqList, kPqSym);
+                int kPq = pRPA->kPqList[kg][qptIndex];
+                int kMq = pRPA->kMqList[kg][qptIndex];
                 for (int bandIndex = 0; bandIndex < ncol; bandIndex++) {
                     double epsilon = pSPARC->lambda[spn_i*Nkpts_kptcomm*ncol + kpt*ncol + bandIndex];
                     double _Complex *psi = pSPARC->Xorb_kpt + kpt*ncol*DMndsp + bandIndex*DMndsp + spn_i*pSPARC->Nd_d_dmcomm;
-                    sternSolverAccuracy[spn_i*Nkpts_kptcomm*ncol + kpt*ncol + bandIndex] = test_chi0_times_deltaV_kpt(pSPARC, sg, kPq, epsilon, pRPA->omega[omegaIndex], pRPA->deltaPsis_kpt, pRPA->deltaVs_kpt, psi, nuChi0EigsAmounts);
+                    sternSolverAccuracy[spn_i*Nkpts_kptcomm*ncol + kpt*ncol + bandIndex] = test_chi0_times_deltaV_kpt(pSPARC, sg, kPq, kMq, epsilon, pRPA->omega[omegaIndex], pRPA->deltaPsis_kpt, pRPA->deltaVs_kpt, psi, nuChi0EigsAmounts);
                 }
             }
         }
@@ -143,15 +143,6 @@ double test_chi0_times_deltaV_gamma(SPARC_OBJ *pSPARC, int sg, double epsilon, d
     return 0.0;
 }
 
-double test_chi0_times_deltaV_kpt(SPARC_OBJ *pSPARC, int sg, int kPq, double epsilon, double omega, double _Complex *deltaPsis_kpt, double _Complex *deltaVs_kpt, double _Complex *psi, int nuChi0EigsAmounts) {
+double test_chi0_times_deltaV_kpt(SPARC_OBJ *pSPARC, int sg, int kPq, int kMq, double epsilon, double omega, double _Complex *deltaPsis_kpt, double _Complex *deltaVs_kpt, double _Complex *psi, int nuChi0EigsAmounts) {
     return 0.0;
-}
-
-int find_kPq(int Nkpts, int **kPqList, int kPqSym) {
-    for (int i = 0; i < Nkpts; i++) {
-        if (kPqList[i][0] == kPqSym) {
-            return i;
-        }
-    }
-    return -1;
 }

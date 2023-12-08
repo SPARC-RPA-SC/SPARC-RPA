@@ -68,7 +68,7 @@ int main(int argc, char *argv[]) {
 
     initialize_RPA(&SPARC, &RPA, argc, argv);
 
-    restore_electronicGroundState(&SPARC, RPA.nuChi0Eigscomm, RPA.nuChi0EigsBridgeComm, RPA.nuChi0EigscommIndex, RPA.rank0nuChi0EigscommInWorld, RPA.k1, RPA.k2, RPA.k3, RPA.kPqList, RPA.Nkpts_sym);
+    restore_electronicGroundState(&SPARC, RPA.nuChi0Eigscomm, RPA.nuChi0EigsBridgeComm, RPA.nuChi0EigscommIndex, RPA.rank0nuChi0EigscommInWorld, RPA.k1, RPA.k2, RPA.k3, RPA.kPqSymList, RPA.Nkpts_sym);
 
     chebyshev_filtering(&SPARC, &RPA);
 

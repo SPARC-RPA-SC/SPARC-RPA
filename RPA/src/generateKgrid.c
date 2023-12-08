@@ -152,27 +152,59 @@ int set_qpoints(double *qptWts, double *q1, double *q2, double *q3, int Kx, int 
     return Nqpts_sym;
 }
 
-void set_kPq_lists(int Nkpts_sym, double *k1sym, double *k2sym, double *k3sym, int Nkpts, double *k1, double *k2, double *k3, 
-    int Nqpts_sym, double *q1, double *q2, double *q3, double Lx, double Ly, double Lz, int **kPqList) {
+void set_kPq_kMq_lists(int Nkpts_sym, double *k1sym, double *k2sym, double *k3sym, int Nkpts, double *k1, double *k2, double *k3, 
+    int Nqpts_sym, double *q1, double *q2, double *q3, double Lx, double Ly, double Lz, int **kPqSymList, int **kPqList, int **kMqList) {
     int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    // kPqList: 2-D int array, abs(kPqList[k index complete table][q index]) - 1 = k+q index sym table
-    // abs(kPqList[k index complete table][0]) - 1 = k index sym table
-    // if kPqList[nk][nq] < 0, the correcponding k-point in sym table is symmetric of the nk th k-point in complete tabke. The \psis should be conjugate
-    // the reason for +1 in indices of kPqList is to distinguish +0th and -0th index in sym table
+    // kPqSymList: 2-D int array, abs(kPqSymList[k index complete table][q index]) - 1 = k+q index sym table
+    // abs(kPqSymList[k index complete table][0]) - 1 = k index sym table
+    // if kPqSymList[nk][nq] < 0, the correcponding k-point in sym table is symmetric of the nk th k-point in complete tabke. The \psis should be conjugate
+    // the reason for +1 in indices of kPqSymList is to distinguish +0th and -0th index in sym table
     for (int nk = 0; nk < Nkpts; nk++) {
-        kPqList[nk][0] = find_kpt_sym_index(k1[nk], k2[nk], k3[nk], Nkpts_sym, k1sym, k2sym, k3sym, Lx, Ly, Lz);
+        kPqSymList[nk][0] = find_kpt_sym_index(k1[nk], k2[nk], k3[nk], Nkpts_sym, k1sym, k2sym, k3sym, Lx, Ly, Lz);
         for (int nq = 0; nq < Nqpts_sym; nq++) {
-            kPqList[nk][nq + 1] = find_kpt_sym_index(k1[nk] + q1[nq], k2[nk] + q2[nq], k3[nk] + q3[nq], Nkpts_sym, k1sym, k2sym, k3sym, Lx, Ly, Lz);
+            kPqSymList[nk][nq + 1] = find_kpt_sym_index(k1[nk] + q1[nq], k2[nk] + q2[nq], k3[nk] + q3[nq], Nkpts_sym, k1sym, k2sym, k3sym, Lx, Ly, Lz);
         }
     }
     #ifdef DEBUG
     if (!rank) {
-        printf("abs value of indices in kPqList are +1 larger than index of its corresponding kpt in kpt sym table\n");
+        printf("abs value of indices in kPqSymList are +1 larger than index of its corresponding kpt in kpt sym table\n");
         for (int nk = 0; nk < Nkpts; nk++) {
-            printf("kPqList[%d]: %d", nk, kPqList[nk][0]);
+            printf("kPqSymList[%d]: %d", nk, kPqSymList[nk][0]);
             for (int nq = 0; nq < Nqpts_sym; nq++) {
-                printf(" %d", kPqList[nk][nq + 1]);
+                printf(" %d", kPqSymList[nk][nq + 1]);
+            }
+            printf("\n");
+        }
+    }
+    #endif
+    int kPqSym = INT_MAX;
+    for (int nk = 0; nk < Nkpts; nk++) {
+        for (int nq = 0; nq < Nqpts_sym; nq++){
+            kPqSym = kPqSymList[nk][nq + 1];
+            for (int possiblek = 0; possiblek < Nkpts; possiblek++) {
+                if (kPqSymList[possiblek][0] == kPqSym) {
+                    kPqList[nk][nq] = possiblek;
+                    kMqList[possiblek][nq] = nk;
+                    break;
+                }
+            }
+        }
+    }
+    #ifdef DEBUG
+    if (!rank) {
+        printf("kPqList and kMqList are mappings between complete k-points.\n");
+        for (int nk = 0; nk < Nkpts; nk++) {
+            printf("kPqList[%d]: ", nk);
+            for (int nq = 0; nq < Nqpts_sym; nq++) {
+                printf(" %d", kPqList[nk][nq]);
+            }
+            printf("\n");
+        }
+        for (int nk = 0; nk < Nkpts; nk++) {
+            printf("kMqList[%d]: ", nk);
+            for (int nq = 0; nq < Nqpts_sym; nq++) {
+                printf(" %d", kMqList[nk][nq]);
             }
             printf("\n");
         }
