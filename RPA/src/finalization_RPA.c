@@ -38,7 +38,8 @@ void finalize_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA) {
             free(pRPA->deltaRhos);
             free(pRPA->deltaVs);
             free(pRPA->initDeltaVs);
-            free(pRPA->deltaPsis);
+            free(pRPA->deltaPsisReal);
+            free(pRPA->deltaPsisImag);
         } else {
             free(pRPA->deltaRhos_kpt);
             free(pRPA->deltaVs_kpt);

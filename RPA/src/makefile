@@ -102,10 +102,9 @@ SPARC_OBJSC = ../../src/initialization.o ../../src/readfiles.o ../../src/atomdat
         ../../src/cyclix/cyclix_stress.o 
 
 OBJSC = main.o initialization_SPARC.o initialization_RPA.o generateKgrid.o parallelization_RPA.o parallelization_SPARC.o \
-	chebyshevFiltering.o restoreElectronicGroundState.o printResult.o finalization_RPA.o
+	chebyshevFiltering.o linearSolvers.o restoreElectronicGroundState.o printResult.o finalization_RPA.o
 
 LIBBASE = ../lib/rpacalc
-TESTBASE = ../.ci
 
 override CC=mpicc
 
@@ -121,5 +120,3 @@ rpacalc: $(OBJSC)
 .PHONY: clean
 clean:
 	rm -f  $(OBJSC) $(LIBBASE)
-test: ../tests/SPARC_testing_script.py
-	cd ../tests; python SPARC_testing_script.py

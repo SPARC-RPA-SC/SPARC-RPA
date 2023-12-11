@@ -7,6 +7,8 @@
  * 
  * Copyright (c) 2020 Material Physics & Mechanics Group, Georgia Tech.
  */
+#ifndef MAINRPA
+#define MAINRPA
 
 #include <mpi.h>
 #include <complex.h>
@@ -81,7 +83,8 @@ typedef struct _RPA_OBJ {
     double _Complex *deltaVs_kpt; // Its length is pSPARC->Nd_d_dmcomm*nNuChi0Eigscomm
     double *deltaRhos; // in dmcomm, save sum of \psi_n^*(\Delta\psi_n) over bandcomm n; then AllReduce over bandcomm, kptcomm and spincomm. Its length is pSPARC->Nd_d_dmcomm * nNuChi0Eigscomm
     double _Complex *deltaRhos_kpt; // in dmcomm, save sum of \psi_n^*(\Delta\psi_n) over bandcomm n; then AllReduce over bandcomm, kptcomm and spincomm. Its length is pSPARC->Nd_d_dmcomm * nNuChi0Eigscomm
-    double *deltaPsis; // in dmcomm, save (\Delta\psi_n) of the current band, kpt and spin. Its length is pSPARC->Nd_d_dmcomm * nNuChi0Eigscomm
+    double *deltaPsisReal; // in dmcomm, save real part of (\Delta\psi_n) of the current band, kpt and spin. Its length is pSPARC->Nd_d_dmcomm * nNuChi0Eigscomm
+    double *deltaPsisImag; // in dmcomm, save imag part of (\Delta\psi_n) of the current band, kpt and spin. Its length is pSPARC->Nd_d_dmcomm * nNuChi0Eigscomm
     double _Complex *deltaPsis_kpt; // in dmcomm, save (\Delta\psi_n) of the current band, kpt, spin and \Delta V. Its length is pSPARC->Nd_d_dmcomm * 2
 } RPA_OBJ;
 
@@ -111,3 +114,5 @@ typedef struct _RPA_INPUT_OBJ {
     char InDensDCubFilename[L_STRING];
     char InOrbitalFilename[L_STRING];
 } RPA_INPUT_OBJ;
+
+#endif

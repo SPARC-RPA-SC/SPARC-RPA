@@ -44,7 +44,8 @@ void initialize_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int argc, char* argv[]) {
     pRPA->deltaRhos = NULL;
     pRPA->deltaVs = NULL;
     pRPA->initDeltaVs = NULL;
-    pRPA->deltaPsis = NULL;
+    pRPA->deltaPsisReal = NULL;
+    pRPA->deltaPsisImag = NULL;
     pRPA->deltaRhos_kpt = NULL;
     pRPA->deltaVs_kpt = NULL;
     pRPA->initDeltaVs_kpt = NULL;
@@ -133,7 +134,8 @@ void initialize_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int argc, char* argv[]) {
         if (pSPARC->isGammaPoint) {
             pRPA->deltaRhos = (double*)calloc(sizeof(double), pSPARC->Nd_d_dmcomm * pRPA->nNuChi0Eigscomm);
             pRPA->deltaVs = (double*)calloc(sizeof(double), pSPARC->Nd_d_dmcomm * pRPA->nNuChi0Eigscomm);
-            pRPA->deltaPsis = (double*)calloc(sizeof(double), pSPARC->Nd_d_dmcomm * pRPA->nNuChi0Eigscomm);
+            pRPA->deltaPsisReal = (double*)calloc(sizeof(double), pSPARC->Nd_d_dmcomm * pRPA->nNuChi0Eigscomm);
+            pRPA->deltaPsisImag = (double*)calloc(sizeof(double), pSPARC->Nd_d_dmcomm * pRPA->nNuChi0Eigscomm);
         } else {
             pRPA->deltaRhos_kpt = (double _Complex*)calloc(sizeof(double _Complex), pSPARC->Nd_d_dmcomm * pRPA->nNuChi0Eigscomm);
             pRPA->deltaVs_kpt = (double _Complex*)calloc(sizeof(double _Complex), pSPARC->Nd_d_dmcomm * pRPA->nNuChi0Eigscomm);
