@@ -9,7 +9,7 @@
 #include "main.h"
 #include "restoreElectronicGroundState.h"
 #include "chebyshevFiltering.h"
-#include "linearSolvers.h"
+#include "sternheimerEquation.h"
 
 void chebyshev_filtering(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA)
 {
@@ -164,7 +164,7 @@ void test_Hx(SPARC_OBJ *pSPARC, double *testHxAccuracy)
 // void test_sternheimer_solver(SPARC_OBJ *pSPARC, int **kPqSymList, int qptIndex, double omega, double _Complex *deltaPsis_kpt, double _Complex *deltaVs_kpt, int nuChi0EigsAmount, double *sternSolverAccuracy) {
 void test_sternheimer_solver(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int omegaIndex, double *sternSolverAccuracy)
 {
-    int nuChi0EigsAmounts = 1;
+    int nuChi0EigsAmounts = 1; // only the first \Delta V in the nuChi0Eigscomm takes part in the test
     int DMndsp = pSPARC->Nd_d_dmcomm * pSPARC->Nspinor_spincomm;
     int ncol = pSPARC->Nband_bandcomm;
     int Nkpts_kptcomm = pSPARC->Nkpts_kptcomm;
@@ -188,7 +188,7 @@ void test_sternheimer_solver(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int
                     }
                 }
                 fclose(outputPsi);
-                sternSolverAccuracy[spn_i * ncol + bandIndex] = test_sternheimer_solver_gamma(pSPARC, spn_i, epsilon, pRPA->omega[omegaIndex], pRPA->deltaPsisReal, pRPA->deltaPsisImag, pRPA->deltaVs, psi, nuChi0EigsAmounts);
+                sternSolverAccuracy[spn_i * ncol + bandIndex] = sternheimer_solver_gamma(pSPARC, spn_i, epsilon, pRPA->omega[omegaIndex], pRPA->deltaPsisReal, pRPA->deltaPsisImag, pRPA->deltaVs, psi, nuChi0EigsAmounts);
                 printf("spn_i %d, globalBandIndex %d, omegaIndex %d, stern res norm %.6E\n", spn_i, bandIndex + pSPARC->band_start_indx, omegaIndex, sternSolverAccuracy[spn_i * ncol + bandIndex]);
                 // print the \Delta \psi vector from the first \Delta V.
                 // the code is only for cases without domain parallelization. In the case with domain parallelization, it needs to be modified by parallel output
@@ -232,7 +232,7 @@ void test_sternheimer_solver(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int
                         }
                     }
                     fclose(outputPsi);
-                    sternSolverAccuracy[spn_i * Nkpts_kptcomm * ncol + kpt * ncol + bandIndex] = test_sternheimer_solver_kpt(pSPARC, spn_i, kPq, kMq, epsilon, 
+                    sternSolverAccuracy[spn_i * Nkpts_kptcomm * ncol + kpt * ncol + bandIndex] = sternheimer_solver_kpt(pSPARC, spn_i, kPq, kMq, epsilon, 
                          pRPA->omega[omegaIndex], pRPA->deltaPsis_kpt, pRPA->deltaVs_kpt, psi_kpt, nuChi0EigsAmounts);
                     printf("spn_i %d, globalKpt %d, globalBandIndex %d, omegaIndex %d, -omega, stern res norm %.6E\n", spn_i, kpt + pSPARC->kpt_start_indx, bandIndex + pSPARC->band_start_indx, 
                          omegaIndex, sternSolverAccuracy[spn_i*Nkpts_kptcomm*ncol + kpt*ncol + bandIndex]);
@@ -248,7 +248,7 @@ void test_sternheimer_solver(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int
                         }
                     }
                     fclose(outputDpsi);
-                    sternSolverAccuracy[spn_i * Nkpts_kptcomm * ncol + kpt * ncol + bandIndex + 1] = test_sternheimer_solver_kpt(pSPARC, spn_i, kPq, kMq, epsilon, 
+                    sternSolverAccuracy[spn_i * Nkpts_kptcomm * ncol + kpt * ncol + bandIndex + 1] = sternheimer_solver_kpt(pSPARC, spn_i, kPq, kMq, epsilon, 
                          -pRPA->omega[omegaIndex], pRPA->deltaPsis_kpt + pSPARC->Nd_d_dmcomm, pRPA->deltaVs_kpt, psi_kpt, nuChi0EigsAmounts);
                     printf("spn_i %d, globalKpt %d, globalBandIndex %d, omegaIndex %d, +omega, stern res norm %.6E\n", spn_i, kpt + pSPARC->kpt_start_indx, bandIndex + pSPARC->band_start_indx, 
                          omegaIndex, sternSolverAccuracy[spn_i*Nkpts_kptcomm*ncol + kpt*ncol + bandIndex + 1]);
@@ -269,112 +269,5 @@ void test_sternheimer_solver(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int
     }
 }
 
-double test_sternheimer_solver_gamma(SPARC_OBJ *pSPARC, int spn_i, double epsilon, double omega, double *deltaPsisReal, double *deltaPsisImag, double *deltaVs, double *psi, int nuChi0EigsAmounts)
-{
-    void (*lhsfun)(SPARC_OBJ *, int, double, double, double *, double *, double _Complex *, int) = Sternheimer_lhs;
-    int DMnd = pSPARC->Nd_d_dmcomm;
-    double sqrtdV = sqrt(pSPARC->dV);
-    double _Complex *SternheimerRhs = (double _Complex *)calloc(sizeof(double _Complex), DMnd);
-    for (int i = 0; i < DMnd; i++) // only test one \Delta V
-    {
-        SternheimerRhs[i] = -deltaVs[i]*(psi[i]/sqrtdV); // the unit of \psi and \delta\psi in Sternheimer eq. are sqrt(e/V).
-    }
 
-    set_initial_guess_deltaPsis(pSPARC, spn_i, epsilon, omega, SternheimerRhs, deltaPsisReal, deltaPsisImag);
 
-    int maxIter = 1000;
-    double *resNormRecords = (double *)calloc(sizeof(double), maxIter * nuChi0EigsAmounts); // 1000 is maximum iteration time
-    int iterTime = block_COCG(lhsfun, pSPARC, spn_i, epsilon, omega, deltaPsisReal, deltaPsisImag, SternheimerRhs, nuChi0EigsAmounts, 1e-8, maxIter, resNormRecords);
-
-    double _Complex *residual = (double _Complex *)calloc(sizeof(double _Complex), DMnd*nuChi0EigsAmounts);
-    double residualNorm = 0.0;
-    Sternheimer_lhs(pSPARC, spn_i, epsilon, omega, deltaPsisReal, deltaPsisImag, residual, nuChi0EigsAmounts);
-    for (int i = 0; i < DMnd; i++) // only test one \Delta V
-    {
-        residual[i] -= SternheimerRhs[i];
-        residualNorm += conj(residual[i]) * residual[i];
-    }
-    free(SternheimerRhs);
-    free(resNormRecords);
-    free(residual);
-    return residualNorm;
-}
-
-void Sternheimer_lhs(SPARC_OBJ *pSPARC, int spn_i, double epsilon, double omega, double *Xreal, double *Ximag, double _Complex *lhsX, int nuChi0EigsAmounts)
-{
-    int sg = pSPARC->spin_start_indx + spn_i;
-    int DMnd = pSPARC->Nd_d_dmcomm;
-    // int DMndsp = DMnd * pSPARC->Nspinor_spincomm;
-    for (int i = 0; i < DMnd * nuChi0EigsAmounts; i++) {
-        lhsX[i] = 0.0;
-    }
-    double *lhsXreal_Xcomp = (double*)calloc(sizeof(double), DMnd * nuChi0EigsAmounts);
-    Hamiltonian_vectors_mult( // (Hamiltonian + c * I), use kpt function directly to operate complex variables
-        pSPARC, pSPARC->Nd_d_dmcomm, pSPARC->DMVertices_dmcomm, pSPARC->Veff_loc_dmcomm + sg * pSPARC->Nd_d_dmcomm,
-        pSPARC->Atom_Influence_nloc, pSPARC->nlocProj, nuChi0EigsAmounts, -epsilon, Xreal, DMnd, lhsXreal_Xcomp, DMnd, spn_i, pSPARC->dmcomm); // reminder: ldi and ldo should not be DMndsp!
-    for (int i = 0; i < DMnd * nuChi0EigsAmounts; i++) {// sternheimer eq.s for all \Delta Vs are solved together
-        lhsX[i] += lhsXreal_Xcomp[i] - omega*Xreal[i] * I;
-    }
-    Hamiltonian_vectors_mult( // (Hamiltonian + c * I), use kpt function directly to operate complex variables
-        pSPARC, pSPARC->Nd_d_dmcomm, pSPARC->DMVertices_dmcomm, pSPARC->Veff_loc_dmcomm + sg * pSPARC->Nd_d_dmcomm,
-        pSPARC->Atom_Influence_nloc, pSPARC->nlocProj, nuChi0EigsAmounts, -epsilon, Ximag, DMnd, lhsXreal_Xcomp, DMnd, spn_i, pSPARC->dmcomm); // reminder: ldi and ldo should not be DMndsp!
-    for (int i = 0; i < DMnd * nuChi0EigsAmounts; i++) {// sternheimer eq.s for all \Delta Vs are solved together
-        lhsX[i] += lhsXreal_Xcomp[i] * I + omega*Ximag[i];
-    }
-    free(lhsXreal_Xcomp);
-}
-
-void set_initial_guess_deltaPsis(SPARC_OBJ *pSPARC, int spn_i, double epsilon, double omega, double _Complex *SternheimerRhs, double *deltaPsisReal, double *deltaPsisImag)
-{
-    // going to add the code for generating the initial guess based on psis
-}
-
-double test_sternheimer_solver_kpt(SPARC_OBJ *pSPARC, int spn_i, int kPq, int kMq, double epsilon, double omega, double _Complex *deltaPsis_kpt, double _Complex *deltaVs_kpt, double _Complex *psi_kpt, int nuChi0EigsAmounts)
-{
-    void (*lhsfun)(SPARC_OBJ *, int, int, double, double, double _Complex *, double _Complex *, int) = Sternheimer_lhs_kpt;
-    int DMnd = pSPARC->Nd_d_dmcomm;
-    double sqrtdV = sqrt(pSPARC->dV);
-    double _Complex *SternheimerRhs_kpt = (double _Complex *)calloc(sizeof(double _Complex), DMnd);
-    for (int i = 0; i < DMnd; i++)
-    {
-        SternheimerRhs_kpt[i] = -deltaVs_kpt[i]*(psi_kpt[i]/sqrtdV); // the unit of \psi and \delta\psi in Sternheimer eq. are sqrt(e/V).
-    }
-
-    set_initial_guess_deltaPsis_kpt(pSPARC, spn_i, kPq, kMq, epsilon, omega, SternheimerRhs_kpt, deltaPsis_kpt);
-
-    int maxIter = 1000;
-    double *resNormRecords = (double *)calloc(sizeof(double), maxIter * nuChi0EigsAmounts); // 1000 is maximum iteration time
-    int iterTime = kpt_solver(lhsfun, pSPARC, spn_i, kPq, epsilon, omega, deltaPsis_kpt, SternheimerRhs_kpt, nuChi0EigsAmounts, maxIter, resNormRecords);
-
-    double _Complex *residual = (double _Complex *)calloc(sizeof(double _Complex), DMnd);
-    double residualNorm = 0.0;
-    Sternheimer_lhs_kpt(pSPARC, spn_i, kPq, epsilon, omega, deltaPsis_kpt, residual, 1);
-    for (int i = 0; i < DMnd; i++)
-    {
-        residual[i] -= SternheimerRhs_kpt[i];
-        residualNorm += conj(residual[i]) * residual[i];
-    }
-    free(SternheimerRhs_kpt);
-    free(resNormRecords);
-    free(residual);
-    return residualNorm;
-}
-
-void set_initial_guess_deltaPsis_kpt(SPARC_OBJ *pSPARC, int spn_i, int kPq, int kMq, double epsilon, double omega, double _Complex *SternheimerRhs, double _Complex *deltaPsis)
-{
-    // going to add the code for generating the initial guess based on psis
-}
-
-void Sternheimer_lhs_kpt(SPARC_OBJ *pSPARC, int spn_i, int kPq, double epsilon, double omega, double _Complex *X, double _Complex *lhsX, int nuChi0EigsAmounts)
-{
-    int sg = pSPARC->spin_start_indx + spn_i;
-    int DMnd = pSPARC->Nd_d_dmcomm;
-    // int DMndsp = DMnd * pSPARC->Nspinor_spincomm;
-    Hamiltonian_vectors_mult_kpt( // (Hamiltonian + c * I), use kpt function directly to operate complex variables
-        pSPARC, DMnd, pSPARC->DMVertices_dmcomm, pSPARC->Veff_loc_dmcomm + sg * pSPARC->Nd_d_dmcomm,
-        pSPARC->Atom_Influence_nloc, pSPARC->nlocProj, nuChi0EigsAmounts, -epsilon, X, DMnd, lhsX, DMnd, spn_i, kPq, pSPARC->dmcomm); // reminder: ldi and ldo should not be DMndsp!
-    for (int i = 0; i < DMnd; i++) // different from gamma point case, Sternheimer eq.s for different \Delta Vs are solved one by one
-    {
-        lhsX[i] -= omega * I;
-    }
-}
