@@ -35,16 +35,14 @@ void chebyshev_filtering(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA)
     free(testHxAccuracy);
 
     if ((nuChi0EigscommIndex == pRPA->npnuChi0Neig - 1) && (pSPARC->dmcomm != MPI_COMM_NULL))
-    { // this test is done in only one nuChi0Eigscomm, and only the first \Delta V takes part in the test
+    { // this test is done in only one nuChi0Eigscomm
         int qptIndex = 1;
         int omegaIndex = 0;
         if (qptIndex > pRPA->Nqpts_sym - 1)
             qptIndex = pRPA->Nqpts_sym - 1;
         if (omegaIndex > pRPA->Nomega - 1)
             omegaIndex = pRPA->Nomega - 1;
-        double *sternSolverAccuracy = (double *)calloc(sizeof(double), pSPARC->Nkpts_kptcomm * pSPARC->Nspin_spincomm * pSPARC->Nband_bandcomm * 2);
-        test_sternheimer_solver(pSPARC, pRPA, qptIndex, omegaIndex, sternSolverAccuracy);
-        free(sternSolverAccuracy);
+        test_sternheimer_solver(pSPARC, pRPA, qptIndex, omegaIndex);
     }
 }
 
@@ -65,13 +63,16 @@ void initialize_deltaVs(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA)
                 int dmcommRank;
                 MPI_Comm_rank(pSPARC->dmcomm, &dmcommRank);
                 if (dmcommRank == 0) {
-                    FILE *output1stDV = fopen("deltaV_first.txt", "w");
+                    FILE *output1stDV = fopen("deltaVs.txt", "w");
                     if (output1stDV ==  NULL) {
-                        printf("error printing 1st delta V\n");
+                        printf("error printing delta Vs in test\n");
                         exit(EXIT_FAILURE);
                     } else {
-                        for (int index = 0; index < Nd; index++) {
-                            fprintf(output1stDV, "%12.9f\n", pRPA->deltaVs[index]);
+                        for (int nuChi0EigIndex = 0; nuChi0EigIndex < pRPA->nNuChi0Eigscomm; nuChi0EigIndex++) {
+                            for (int index = 0; index < Nd; index++) {
+                                fprintf(output1stDV, "%12.9f\n", pRPA->deltaVs[nuChi0EigIndex*Nd + index]);
+                            }
+                            fprintf(output1stDV, "\n");
                         }
                     }
                     fclose(output1stDV);
@@ -91,13 +92,16 @@ void initialize_deltaVs(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA)
                 int dmcommRank;
                 MPI_Comm_rank(pSPARC->dmcomm, &dmcommRank);
                 if (dmcommRank == 0) {
-                    FILE *output1stDV = fopen("deltaV_kpt_first.txt", "w");
+                    FILE *output1stDV = fopen("deltaVs_kpt.txt", "w");
                     if (output1stDV ==  NULL) {
-                        printf("error printing 1st delta V\n");
+                        printf("error printing delta Vs in test\n");
                         exit(EXIT_FAILURE);
                     } else {
-                        for (int index = 0; index < Nd; index++) {
-                            fprintf(output1stDV, "%12.9f %12.9f\n", creal(pRPA->deltaVs_kpt[index]), cimag(pRPA->deltaVs_kpt[index]));
+                        for (int nuChi0EigIndex = 0; nuChi0EigIndex < pRPA->nNuChi0Eigscomm; nuChi0EigIndex++) {
+                            for (int index = 0; index < Nd; index++) {
+                                fprintf(output1stDV, "%12.9f %12.9f\n", creal(pRPA->deltaVs_kpt[nuChi0EigIndex*Nd + index]), cimag(pRPA->deltaVs_kpt[nuChi0EigIndex*Nd + index]));
+                            }
+                            fprintf(output1stDV, "\n");
                         }
                     }
                     fclose(output1stDV);
@@ -162,14 +166,14 @@ void test_Hx(SPARC_OBJ *pSPARC, double *testHxAccuracy)
 }
 
 // void test_sternheimer_solver(SPARC_OBJ *pSPARC, int **kPqSymList, int qptIndex, double omega, double _Complex *deltaPsis_kpt, double _Complex *deltaVs_kpt, int nuChi0EigsAmount, double *sternSolverAccuracy) {
-void test_sternheimer_solver(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int omegaIndex, double *sternSolverAccuracy)
+void test_sternheimer_solver(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int omegaIndex)
 {
-    int nuChi0EigsAmounts = 1; // only the first \Delta V in the nuChi0Eigscomm takes part in the test
+    int nuChi0EigsAmounts = pRPA->nNuChi0Eigscomm; // only the first \Delta V in the nuChi0Eigscomm takes part in the test
     int DMndsp = pSPARC->Nd_d_dmcomm * pSPARC->Nspinor_spincomm;
     int ncol = pSPARC->Nband_bandcomm;
     int Nkpts_kptcomm = pSPARC->Nkpts_kptcomm;
     if (pSPARC->isGammaPoint)
-    {
+    {   double *sternSolverAccuracy = (double *)calloc(sizeof(double), pSPARC->Nkpts_kptcomm * pSPARC->Nspin_spincomm * pSPARC->Nband_bandcomm); // the sum of 2-norm of residuals of all Sternheimer eq.s assigned in this processor
         for (int spn_i = 0; spn_i < pSPARC->Nspin_spincomm; spn_i++)
         {
             for (int bandIndex = 0; bandIndex < ncol; bandIndex++)
@@ -199,16 +203,21 @@ void test_sternheimer_solver(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int
                     printf("error printing delta psi band %d, spin %d\n", pSPARC->band_start_indx + bandIndex, pSPARC->spin_start_indx + spn_i);
                     exit(EXIT_FAILURE);
                 } else {
-                    for (int index = 0; index < pSPARC->Nd_d_dmcomm; index++) {
-                        fprintf(outputDpsi, "%12.9f %12.9f\n", pRPA->deltaPsisReal[index], pRPA->deltaPsisImag[index]);
+                    for (int nuChi0EigIndex = 0; nuChi0EigIndex < nuChi0EigsAmounts; nuChi0EigIndex++) {
+                        for (int index = 0; index < pSPARC->Nd_d_dmcomm; index++) {
+                            fprintf(outputDpsi, "%12.9f %12.9f\n", pRPA->deltaPsisReal[nuChi0EigIndex*pSPARC->Nd_d_dmcomm + index], pRPA->deltaPsisImag[nuChi0EigIndex*pSPARC->Nd_d_dmcomm + index]);
+                        }
+                        fprintf(outputDpsi, "\n");
                     }
                 }
                 fclose(outputDpsi);
             }
         }
+        free(sternSolverAccuracy);
     }
     else
     {
+        double *sternSolverAccuracy = (double *)calloc(sizeof(double), pSPARC->Nkpts_kptcomm * pSPARC->Nspin_spincomm * pSPARC->Nband_bandcomm * 2);
         for (int spn_i = 0; spn_i < pSPARC->Nspin_spincomm; spn_i++)
         {
             for (int kpt = 0; kpt < Nkpts_kptcomm; kpt++)
@@ -243,8 +252,8 @@ void test_sternheimer_solver(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int
                         printf("error printing delta psi kpt %d, band %d, spin %d -\n", pSPARC->kpt_start_indx + kpt, pSPARC->band_start_indx + bandIndex, pSPARC->spin_start_indx + spn_i);
                         exit(EXIT_FAILURE);
                     } else {
-                        for (int index = 0; index < pSPARC->Nd_d_dmcomm; index++) {
-                            fprintf(outputDpsi, "%12.9f %12.9f\n", creal(pRPA->deltaVs_kpt[index]), cimag(pRPA->deltaVs_kpt[index]));
+                        for (int index = 0; index < pSPARC->Nd_d_dmcomm; index++) { // print \Delta psi for the last \Delta V
+                            fprintf(outputDpsi, "%12.9f %12.9f\n", creal(pRPA->deltaPsis_kpt[index]), cimag(pRPA->deltaPsis_kpt[index]));
                         }
                     }
                     fclose(outputDpsi);
@@ -258,14 +267,15 @@ void test_sternheimer_solver(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int
                         printf("error printing delta psi kpt %d, band %d, spin %d +\n", pSPARC->kpt_start_indx + kpt, pSPARC->band_start_indx + bandIndex, pSPARC->spin_start_indx + spn_i);
                         exit(EXIT_FAILURE);
                     } else {
-                        for (int index = 0; index < pSPARC->Nd_d_dmcomm; index++) {
-                            fprintf(outputDpsi, "%12.9f %12.9f\n", creal(pRPA->deltaVs_kpt[index]), cimag(pRPA->deltaVs_kpt[index]));
+                        for (int index = 0; index < pSPARC->Nd_d_dmcomm; index++) { // print \Delta psi for the last \Delta V
+                            fprintf(outputDpsi, "%12.9f %12.9f\n", creal(pRPA->deltaPsis_kpt[index]), cimag(pRPA->deltaPsis_kpt[index]));
                         }
                     }
                     fclose(outputDpsi);
                 }
             }
         }
+        free(sternSolverAccuracy);
     }
 }
 

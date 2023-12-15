@@ -17,9 +17,11 @@ double sternheimer_solver_gamma(SPARC_OBJ *pSPARC, int spn_i, double epsilon, do
     void (*lhsfun)(SPARC_OBJ *, int, double, double, double *, double *, double _Complex *, int) = Sternheimer_lhs;
     int DMnd = pSPARC->Nd_d_dmcomm;
     double sqrtdV = sqrt(pSPARC->dV);
-    double _Complex *SternheimerRhs = (double _Complex *)calloc(sizeof(double _Complex), DMnd);
-    for (int i = 0; i < nuChi0EigsAmounts*DMnd; i++) {
-        SternheimerRhs[i] = -deltaVs[i]*(psi[i]/sqrtdV); // the unit of \psi and \delta\psi in Sternheimer eq. are sqrt(e/V).
+    double _Complex *SternheimerRhs = (double _Complex *)calloc(sizeof(double _Complex), DMnd*nuChi0EigsAmounts);
+    for (int nuChi0EigsIndex = 0; nuChi0EigsIndex < nuChi0EigsAmounts; nuChi0EigsIndex++) {
+        for (int i = 0; i < DMnd; i++) {
+            SternheimerRhs[nuChi0EigsIndex*DMnd + i] = -deltaVs[nuChi0EigsIndex*DMnd + i]*(psi[i]/sqrtdV); // the unit of \psi and \delta\psi in Sternheimer eq. are sqrt(e/V).
+        }
     }
 
     set_initial_guess_deltaPsis(pSPARC, spn_i, epsilon, omega, SternheimerRhs, deltaPsisReal, deltaPsisImag);

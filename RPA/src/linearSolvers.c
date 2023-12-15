@@ -102,6 +102,7 @@ int block_COCG(void (*lhsfun)(SPARC_OBJ*, int, double, double, double *, double 
     free(W);
     free(VT);
     free(rho);
+    free(lapackRho);
     free(P);
     free(beta);
     free(U);
