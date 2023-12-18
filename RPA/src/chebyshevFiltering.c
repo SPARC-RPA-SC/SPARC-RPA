@@ -165,7 +165,6 @@ void test_Hx(SPARC_OBJ *pSPARC, double *testHxAccuracy)
     }
 }
 
-// void test_sternheimer_solver(SPARC_OBJ *pSPARC, int **kPqSymList, int qptIndex, double omega, double _Complex *deltaPsis_kpt, double _Complex *deltaVs_kpt, int nuChi0EigsAmount, double *sternSolverAccuracy) {
 void test_sternheimer_solver(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int omegaIndex)
 {
     int nuChi0EigsAmounts = pRPA->nNuChi0Eigscomm; // only the first \Delta V in the nuChi0Eigscomm takes part in the test
@@ -217,7 +216,7 @@ void test_sternheimer_solver(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int
     }
     else
     {
-        double *sternSolverAccuracy = (double *)calloc(sizeof(double), pSPARC->Nkpts_kptcomm * pSPARC->Nspin_spincomm * pSPARC->Nband_bandcomm * 2);
+        double *sternSolverAccuracy = (double *)calloc(sizeof(double), pSPARC->Nkpts_kptcomm * pSPARC->Nspin_spincomm * pSPARC->Nband_bandcomm); // the sum of norm of residuals of two Sternheimer eq.s
         for (int spn_i = 0; spn_i < pSPARC->Nspin_spincomm; spn_i++)
         {
             for (int kpt = 0; kpt < Nkpts_kptcomm; kpt++)
@@ -242,36 +241,25 @@ void test_sternheimer_solver(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int
                     }
                     fclose(outputPsi);
                     sternSolverAccuracy[spn_i * Nkpts_kptcomm * ncol + kpt * ncol + bandIndex] = sternheimer_solver_kpt(pSPARC, spn_i, kPq, kMq, epsilon, 
-                         pRPA->omega[omegaIndex], pRPA->deltaPsis_kpt, pRPA->deltaVs_kpt, psi_kpt, nuChi0EigsAmounts);
-                    printf("spn_i %d, globalKpt %d, globalBandIndex %d, omegaIndex %d, -omega, stern res norm %.6E\n", spn_i, kpt + pSPARC->kpt_start_indx, bandIndex + pSPARC->band_start_indx, 
+                         pRPA->omega[omegaIndex], pRPA->deltaPsis_kpt, pRPA->deltaVs_kpt, psi_kpt, nuChi0EigsAmounts); // solve the two Sternheimer eq.s (-i\omega and +i\omega) together
+                    printf("spn_i %d, globalKpt %d, globalBandIndex %d, omegaIndex %d, +-omega, stern res norm %.6E\n", spn_i, kpt + pSPARC->kpt_start_indx, bandIndex + pSPARC->band_start_indx, 
                          omegaIndex, sternSolverAccuracy[spn_i*Nkpts_kptcomm*ncol + kpt*ncol + bandIndex]);
+
                     char deltaOrbitalFileName[100];
                     snprintf(deltaOrbitalFileName, 100, "Dpsi_kpt%d_band%d_spin%d_-omega.orbit", pSPARC->kpt_start_indx + kpt, pSPARC->band_start_indx + bandIndex, pSPARC->spin_start_indx + spn_i);
-                    FILE *outputDpsi = fopen(deltaOrbitalFileName, "w");
-                    if (outputDpsi ==  NULL) {
-                        printf("error printing delta psi kpt %d, band %d, spin %d -\n", pSPARC->kpt_start_indx + kpt, pSPARC->band_start_indx + bandIndex, pSPARC->spin_start_indx + spn_i);
-                        exit(EXIT_FAILURE);
-                    } else {
-                        for (int index = 0; index < pSPARC->Nd_d_dmcomm; index++) { // print \Delta psi for the last \Delta V
-                            fprintf(outputDpsi, "%12.9f %12.9f\n", creal(pRPA->deltaPsis_kpt[index]), cimag(pRPA->deltaPsis_kpt[index]));
-                        }
-                    }
-                    fclose(outputDpsi);
-                    sternSolverAccuracy[spn_i * Nkpts_kptcomm * ncol + kpt * ncol + bandIndex + 1] = sternheimer_solver_kpt(pSPARC, spn_i, kPq, kMq, epsilon, 
-                         -pRPA->omega[omegaIndex], pRPA->deltaPsis_kpt + pSPARC->Nd_d_dmcomm, pRPA->deltaVs_kpt, psi_kpt, nuChi0EigsAmounts);
-                    printf("spn_i %d, globalKpt %d, globalBandIndex %d, omegaIndex %d, +omega, stern res norm %.6E\n", spn_i, kpt + pSPARC->kpt_start_indx, bandIndex + pSPARC->band_start_indx, 
-                         omegaIndex, sternSolverAccuracy[spn_i*Nkpts_kptcomm*ncol + kpt*ncol + bandIndex + 1]);
+                    FILE *outputDpsiMinus = fopen(deltaOrbitalFileName, "w");
                     snprintf(deltaOrbitalFileName, 100, "Dpsi_kpt%d_band%d_spin%d_+omega.orbit", pSPARC->kpt_start_indx + kpt, pSPARC->band_start_indx + bandIndex, pSPARC->spin_start_indx + spn_i);
-                    outputDpsi = fopen(deltaOrbitalFileName, "w");
-                    if (outputDpsi ==  NULL) {
-                        printf("error printing delta psi kpt %d, band %d, spin %d +\n", pSPARC->kpt_start_indx + kpt, pSPARC->band_start_indx + bandIndex, pSPARC->spin_start_indx + spn_i);
+                    FILE *outputDpsiPlus = fopen(deltaOrbitalFileName, "w");
+                    if ((outputDpsiMinus ==  NULL) || (outputDpsiPlus ==  NULL)) {
+                        printf("error printing delta psi kpt %d, band %d, spin %d\n", pSPARC->kpt_start_indx + kpt, pSPARC->band_start_indx + bandIndex, pSPARC->spin_start_indx + spn_i);
                         exit(EXIT_FAILURE);
-                    } else {
-                        for (int index = 0; index < pSPARC->Nd_d_dmcomm; index++) { // print \Delta psi for the last \Delta V
-                            fprintf(outputDpsi, "%12.9f %12.9f\n", creal(pRPA->deltaPsis_kpt[index]), cimag(pRPA->deltaPsis_kpt[index]));
-                        }
                     }
-                    fclose(outputDpsi);
+                    for (int index = 0; index < pSPARC->Nd_d_dmcomm; index++) { // print \Delta psi for the last \Delta V
+                        fprintf(outputDpsiMinus, "%12.9f %12.9f\n", creal(pRPA->deltaPsis_kpt[index]), cimag(pRPA->deltaPsis_kpt[index]));
+                        fprintf(outputDpsiPlus, "%12.9f %12.9f\n", creal(pRPA->deltaPsis_kpt[pSPARC->Nd_d_dmcomm + index]), cimag(pRPA->deltaPsis_kpt[pSPARC->Nd_d_dmcomm + index]));
+                    }
+                    fclose(outputDpsiMinus);
+                    fclose(outputDpsiPlus);
                 }
             }
         }

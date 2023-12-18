@@ -27,13 +27,16 @@
  |  └──restore_eigval_occ
  ├──chebyshevFiltering 
  |  ├──(if PDEP method is used) 
- |  |  nuChi0MultiplyDeltaV 
- |  |  ├──sternheimerSolver (block_cocg or gmres, in linearSolver.c)
- |  |  |  ├──(if Gamma point) blockCocg
- |  |  |  └──(if k-point) modGmres
- |  |  ├──composeDeltaRho 
- |  |  └──AARSolver (in linearSolver.c)
- |  └──rpaIntegrationOnOmega
+ |  ├──initialize_deltaVs
+ |  ├──test_Hx
+ |  ├──test_sternheimer_solver (block_cocg or gmres, in linearSolver.c)
+ |  |  ├──(if Gamma point) sternheimer_solver_gamma
+ |  |  |  └──Sternheimer_lhs, block_COCG
+ |  |  └──(if k-point) sternheimer_solver_kpt
+ |  |     └──Sternheimer_lhs_kpt, kpt_solver
+ |  ├──composeDeltaRho 
+ |  └──AARSolver (in linearSolver.c)
+ ├──rpaIntegrationOnOmega
  └──finalization
 */
 

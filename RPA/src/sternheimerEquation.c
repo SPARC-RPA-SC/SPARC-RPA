@@ -92,7 +92,12 @@ double sternheimer_solver_kpt(SPARC_OBJ *pSPARC, int spn_i, int kPq, int kMq, do
 
         Sternheimer_lhs_kpt(pSPARC, spn_i, kPq, epsilon, omega, deltaPsis_kpt, residual, 1);
         free(resNormRecords);
-        for (int i = 0; i < DMnd; i++) { // the sum of square of residual norms of all Sternheimer eq.s of the \psi
+        for (int i = 0; i < DMnd; i++) { // the sum of square of residual norms of 1st Sternheimer eq. (-\i omega) of the \psi
+            residual[i] -= SternheimerRhs_kpt[i];
+            residualNorm += conj(residual[i]) * residual[i];
+        }
+        Sternheimer_lhs_kpt(pSPARC, spn_i, kPq, epsilon, -omega, deltaPsis_kpt + DMnd, residual, 1);
+        for (int i = 0; i < DMnd; i++) { // the sum of square of residual norms of 2nd Sternheimer eq. (+\i omega) of the \psi
             residual[i] -= SternheimerRhs_kpt[i];
             residualNorm += conj(residual[i]) * residual[i];
         }
