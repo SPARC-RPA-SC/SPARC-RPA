@@ -12,7 +12,7 @@
 #include "linearSolvers.h"
 #include "sternheimerEquation.h"
 
-double sternheimer_solver_gamma(SPARC_OBJ *pSPARC, int spn_i, double epsilon, double omega, double *deltaPsisReal, double *deltaPsisImag, double *deltaVs, double *psi, int nuChi0EigsAmounts)
+double sternheimer_solver_gamma(SPARC_OBJ *pSPARC, int spn_i, double epsilon, double omega, double *deltaPsisReal, double *deltaPsisImag, double *deltaVs, double *psi, double bandWeight, double *deltaRhos, int nuChi0EigsAmounts)
 {
     void (*lhsfun)(SPARC_OBJ *, int, double, double, double *, double *, double _Complex *, int) = Sternheimer_lhs;
     int DMnd = pSPARC->Nd_d_dmcomm;
@@ -30,7 +30,13 @@ double sternheimer_solver_gamma(SPARC_OBJ *pSPARC, int spn_i, double epsilon, do
     double *resNormRecords = (double *)calloc(sizeof(double), maxIter * nuChi0EigsAmounts); // 1000 is maximum iteration time
     int iterTime = block_COCG(lhsfun, pSPARC, spn_i, epsilon, omega, deltaPsisReal, deltaPsisImag, SternheimerRhs, nuChi0EigsAmounts, 1e-8, maxIter, resNormRecords);
 
-    double _Complex *residual = (double _Complex *)calloc(sizeof(double _Complex), DMnd*nuChi0EigsAmounts);
+    for (int nuChi0EigsIndex = 0; nuChi0EigsIndex < nuChi0EigsAmounts; nuChi0EigsIndex++) {
+        for (int i = 0; i < DMnd; i++) { // bandWeight includes occupation and spin factor
+            deltaRhos[nuChi0EigsIndex * DMnd + i] += 2 * bandWeight * deltaPsisReal[nuChi0EigsIndex * DMnd + i] * (psi[i] / sqrtdV); // the unit of \psi and \delta\psi in Sternheimer eq. are sqrt(e/V).
+        }
+    }
+
+    double _Complex *residual = (double _Complex *)calloc(sizeof(double _Complex), DMnd * nuChi0EigsAmounts);
     double residualNorm = 0.0;
     Sternheimer_lhs(pSPARC, spn_i, epsilon, omega, deltaPsisReal, deltaPsisImag, residual, nuChi0EigsAmounts);
     for (int i = 0; i < nuChi0EigsAmounts*DMnd; i++) { // the sum of square of residual norms of all Sternheimer eq.s of the \psi
@@ -72,7 +78,7 @@ void set_initial_guess_deltaPsis(SPARC_OBJ *pSPARC, int spn_i, double epsilon, d
     // going to add the code for generating the initial guess based on psis
 }
 
-double sternheimer_solver_kpt(SPARC_OBJ *pSPARC, int spn_i, int kPq, int kMq, double epsilon, double omega, double _Complex *deltaPsis_kpt, double _Complex *deltaVs_kpt, double _Complex *psi_kpt, int nuChi0EigsAmounts)
+double sternheimer_solver_kpt(SPARC_OBJ *pSPARC, int spn_i, int kPq, int kMq, double epsilon, double omega, double _Complex *deltaPsis_kpt, double _Complex *deltaVs_kpt, double _Complex *psi_kpt, double bandWeight, double _Complex *deltaRhos_kpt, int nuChi0EigsAmounts)
 {
     void (*lhsfun)(SPARC_OBJ *, int, int, double, double, double _Complex *, double _Complex *, int) = Sternheimer_lhs_kpt;
     int DMnd = pSPARC->Nd_d_dmcomm;
@@ -90,6 +96,10 @@ double sternheimer_solver_kpt(SPARC_OBJ *pSPARC, int spn_i, int kPq, int kMq, do
         double *resNormRecords = (double *)calloc(sizeof(double), maxIter * nuChi0EigsAmounts); // 1000 is maximum iteration time
         int iterTime = kpt_solver(lhsfun, pSPARC, spn_i, kPq, epsilon, omega, deltaPsis_kpt, SternheimerRhs_kpt, nuChi0EigsAmounts, maxIter, resNormRecords);
 
+        for (int i = 0; i < DMnd; i++) { // bandWeight includes occupation, kpt weight and spin factor
+            deltaRhos_kpt[nuChi0EigsIndex * DMnd + i] += bandWeight * conj(psi_kpt[i] / sqrtdV) * (deltaPsis_kpt[i] + deltaPsis_kpt[DMnd + i]); // the unit of \psi and \delta\psi in Sternheimer eq. are sqrt(e/V).
+        }
+
         Sternheimer_lhs_kpt(pSPARC, spn_i, kPq, epsilon, omega, deltaPsis_kpt, residual, 1);
         free(resNormRecords);
         for (int i = 0; i < DMnd; i++) { // the sum of square of residual norms of 1st Sternheimer eq. (-\i omega) of the \psi
@@ -102,7 +112,7 @@ double sternheimer_solver_kpt(SPARC_OBJ *pSPARC, int spn_i, int kPq, int kMq, do
             residualNorm += conj(residual[i]) * residual[i];
         }
     }
-    
+
     free(SternheimerRhs_kpt);
     free(residual);
     return residualNorm;

@@ -77,10 +77,12 @@ typedef struct _RPA_OBJ {
     int **kPqList;
     int **kMqList;
     // save \Delta V s, \Delta\psi and \Delta\rho s
-    double *initDeltaVs;
-    double _Complex *initDeltaVs_kpt;
+    double *deltaVs_phi; // in dmcomm_phi, save deltaVs; length is pSPARC->Nd_d * nNuChi0Eigscomm
+    double _Complex *deltaVs_kpt_phi; // in dmcomm_phi, save deltaVs; length is pSPARC->Nd_d * nNuChi0Eigscomm
     double *deltaVs; // Its length is pSPARC->Nd_d_dmcomm*nNuChi0Eigscomm
     double _Complex *deltaVs_kpt; // Its length is pSPARC->Nd_d_dmcomm*nNuChi0Eigscomm
+    double *deltaRhos_phi;
+    double _Complex *deltaRhos_kpt_phi;
     double *deltaRhos; // in dmcomm, save sum of \psi_n^*(\Delta\psi_n) over bandcomm n; then AllReduce over bandcomm, kptcomm and spincomm. Its length is pSPARC->Nd_d_dmcomm * nNuChi0Eigscomm
     double _Complex *deltaRhos_kpt; // in dmcomm, save sum of \psi_n^*(\Delta\psi_n) over bandcomm n; then AllReduce over bandcomm, kptcomm and spincomm. Its length is pSPARC->Nd_d_dmcomm * nNuChi0Eigscomm
     double *deltaPsisReal; // in dmcomm, save real part of (\Delta\psi_n) of the current band, kpt and spin. Its length is pSPARC->Nd_d_dmcomm * nNuChi0Eigscomm

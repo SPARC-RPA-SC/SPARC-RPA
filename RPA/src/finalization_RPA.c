@@ -36,14 +36,16 @@ void finalize_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA) {
     if (pRPA->nuChi0EigscommIndex != -1) {
         if (pSPARC->isGammaPoint) {
             free(pRPA->deltaRhos);
+            free(pRPA->deltaRhos_phi);
             free(pRPA->deltaVs);
-            free(pRPA->initDeltaVs);
+            free(pRPA->deltaVs_phi);
             free(pRPA->deltaPsisReal);
             free(pRPA->deltaPsisImag);
         } else {
             free(pRPA->deltaRhos_kpt);
+            free(pRPA->deltaRhos_kpt_phi);
             free(pRPA->deltaVs_kpt);
-            free(pRPA->initDeltaVs_kpt);
+            free(pRPA->deltaVs_kpt_phi);
             free(pRPA->deltaPsis_kpt);
         }
         Free_scfvar(pSPARC);
