@@ -162,7 +162,7 @@ void test_Hx(SPARC_OBJ *pSPARC, double *testHxAccuracy)
 
 void sternheimer_solver(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int omegaIndex) // compute \Delta\rho by solving Sternheimer equations in all pSPARC->dmcomm s
 {
-    int nuChi0EigsAmounts = pRPA->nNuChi0Eigscomm; // only the first \Delta V in the nuChi0Eigscomm takes part in the test
+    int nuChi0EigsAmounts = pRPA->nNuChi0Eigscomm;
     int DMndsp = pSPARC->Nd_d_dmcomm * pSPARC->Nspinor_spincomm;
     int ncol = pSPARC->Nband_bandcomm;
     int Nkpts_kptcomm = pSPARC->Nkpts_kptcomm;

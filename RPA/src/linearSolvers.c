@@ -11,6 +11,7 @@
 #include "tools.h"
 
 #include "linearSolvers.h"
+#include "tools_RPA.h"
 
 int block_COCG(void (*lhsfun)(SPARC_OBJ*, int, double, double, double *, double *, double _Complex*, int),
      SPARC_OBJ* pSPARC, int spn_i, double epsilon, double omega, double *deltaPsisReal, double *deltaPsisImag,
@@ -125,49 +126,6 @@ int kpt_solver(void (*lhsfun)(SPARC_OBJ*, int, int, double, double, double _Comp
     return 0;
 }
 
-// available only in conditions without domain parallelization
-void matrix_transpose(const double _Complex *M, int vecLength, int numVecs, double _Complex *MT) { 
-    int Mindex = 0;
-    for (int Mcol = 0; Mcol < numVecs; Mcol++) {
-        int MTindex = Mcol;
-        for (int Mrow = 0; Mrow < vecLength; Mrow++) {
-            MT[MTindex] = M[Mindex];
-            Mindex++;
-            MTindex += numVecs;
-        }
-    }
-}
-
-// available only in conditions without domain parallelization
-// if there is domain parallelization, then it is necessary to call pdgemm_ function in ScaLapack with blacs
-// to make the distributed matrix multiplication
-void matrix_multiplication(const double _Complex *M, int MsizeRow, int MsizeCol, const double _Complex *x, int numVecs, double _Complex *Mx) { // LHS*RHS
-    int veclength = MsizeCol;
-    int Mxlength = MsizeRow*numVecs;
-    if (MsizeCol != veclength) {
-        printf("Input matrix size error for multiplication. %d %d\n", MsizeCol, veclength);
-        exit(EXIT_FAILURE);
-    }
-    for (int i = 0; i < Mxlength; i++) {
-        Mx[i] = 0.0 + 0.0*I;
-    }
-    int xindex = 0;
-    for (int xcol = 0; xcol < numVecs; xcol++) {
-        int Mindex = 0;
-        for (int xrow = 0; xrow < veclength; xrow++) { // xrow, or Mcol
-            int Mxindex = xcol*MsizeRow;
-            double _Complex xentry = x[xindex]; // x(xrow, Mxcol)
-            for (int Mrow = 0; Mrow < MsizeRow; Mrow++) {
-                double _Complex Mentry = M[Mindex]; // M(Mrow, xrow)
-                Mx[Mxindex] += Mentry * xentry; // Mx(Mrow, xcol)
-                Mindex++;
-                Mxindex++;
-            }
-            xindex++;
-        }
-    }
-}
-
 int judge_converge(int ix, int numVecs, const double *RHS2norm, double tol, const double *resNormRecords) {
     int judge = 1;
     for (int col = 0; col < numVecs; col++) {
@@ -179,9 +137,12 @@ int judge_converge(int ix, int numVecs, const double *RHS2norm, double tol, cons
     return judge;
 }
 
-void divide_complex_vectors(double _Complex *complexVecs, double *realPart, double *imagPart, int length) {
-    for (int i = 0; i < length; i++) {
-        realPart[i] = creal(complexVecs[i]);
-        imagPart[i] = cimag(complexVecs[i]);
-    }
+void AAR_kpt(
+    SPARC_OBJ *pSPARC, 
+    void (*res_fun)(SPARC_OBJ*,int,double,double,double,double,double _Complex*,double _Complex*,double _Complex*,MPI_Comm,double*),  
+    void (*precond_fun)(SPARC_OBJ *,int,double,double _Complex*,double _Complex*,MPI_Comm), double c, 
+    int N, double qptx, double qpty, double qptz, double _Complex *x, double _Complex *b, double omega, double beta, int m, int p, double tol, 
+    int max_iter, MPI_Comm comm
+) {
+
 }

@@ -12,12 +12,14 @@ int kpt_solver(void (*lhsfun)(SPARC_OBJ*, int, int, double, double, double _Comp
      SPARC_OBJ* pSPARC, int spn_i, int kPq, double epsilon, double omega, double _Complex *deltaPsis_kpt, 
      double _Complex *SternheimerRhs_kpt, int nuChi0EigsAmounts, int maxIter, double *resNormRecords);
 
-void matrix_transpose(const double _Complex *M, int vecLength, int numVecs, double _Complex *MT);
-
-void matrix_multiplication(const double _Complex *M, int MsizeRow, int MsizeCol, const double _Complex *x, int numVecs, double _Complex *Mx);
-
 int judge_converge(int ix, int numVecs, const double *RHS2norm, double tol, const double *resNormRecords);
 
-void divide_complex_vectors(double _Complex *complexVecs, double *realPart, double *imagPart, int length);
+void AAR_kpt(
+    SPARC_OBJ *pSPARC, 
+    void (*res_fun)(SPARC_OBJ*,int,double,double,double,double,double _Complex*,double _Complex*,double _Complex*,MPI_Comm,double*),
+    void (*precond_fun)(SPARC_OBJ *,int,double,double _Complex*,double _Complex*,MPI_Comm), double c, 
+    int N, double qptx, double qpty, double qptz, double _Complex *x, double _Complex *b, double omega, double beta, int m, int p, double tol, 
+    int max_iter, MPI_Comm comm
+);
 
 #endif
