@@ -276,7 +276,7 @@ void restore_orbitals(SPARC_OBJ* pSPARC, MPI_Comm nuChi0Eigscomm, MPI_Comm nuChi
     }        
 #ifdef DEBUG
     t2 = MPI_Wtime();
-    if(!rank) printf("Finished setting random orbitals. Time taken: %.3f ms\n",(t2-t1)*1e3);
+    if(!rank) printf("Finished restoring orbitals. Time taken: %.3f ms\n",(t2-t1)*1e3);
 #endif
 }
 

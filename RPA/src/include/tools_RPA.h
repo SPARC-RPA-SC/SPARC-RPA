@@ -11,4 +11,6 @@ void VectorSumComplex(const double _Complex *Vec, const int len, double _Complex
 
 void VectorShiftComplex(double _Complex *Vec, const int len, const double _Complex c, MPI_Comm comm);
 
+void VectorScaleComplex(double _Complex *Vec, const int len, const double c, MPI_Comm comm);
+
 #endif

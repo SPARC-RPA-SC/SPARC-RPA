@@ -85,3 +85,10 @@ void VectorShiftComplex(double _Complex *Vec, const int len, const double _Compl
     for (k = 0; k < len; k++)
         Vec[k] += c;
 }
+
+void VectorScaleComplex(double _Complex *Vec, const int len, const double c, MPI_Comm comm)
+{
+    if (comm == MPI_COMM_NULL) return;
+    for (int k = 0; k < len; k++)
+        Vec[k] *= c;
+}

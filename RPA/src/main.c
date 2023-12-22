@@ -25,17 +25,19 @@
  |  |  └──read_orbitals_distributed_kpt_RPA
  |  ├──restore_electronDensity
  |  └──restore_eigval_occ
+ ├──initialize_deltaVs
+ ├──test_Hx_nuChi0
  ├──chebyshevFiltering 
- |  ├──(if PDEP method is used) 
- |  ├──initialize_deltaVs
- |  ├──test_Hx
- |  ├──test_sternheimer_solver (block_cocg or gmres, in linearSolver.c)
+ |  ├──(if PDEP method is used) find_min_eigenvalue
+ |  ├──sternheimer_solver (block_cocg or gmres, in linearSolver.c)
  |  |  ├──(if Gamma point) sternheimer_solver_gamma
  |  |  |  └──Sternheimer_lhs, block_COCG
  |  |  └──(if k-point) sternheimer_solver_kpt
  |  |     └──Sternheimer_lhs_kpt, kpt_solver
- |  ├──composeDeltaRho 
- |  └──AARSolver (in linearSolver.c)
+ |  ├──collect_transfer_deltaRho
+ |  └──Calculate_deltaRhoPotential (in linearSolver.c)
+ |        ├──(if Gamma point) Calculate_deltaRhoPotential_gamma
+ |        └──(if k-point) Calculate_deltaRhoPotential_kpt
  ├──rpaIntegrationOnOmega
  └──finalization
 */
@@ -73,7 +75,18 @@ int main(int argc, char *argv[]) {
 
     restore_electronicGroundState(&SPARC, RPA.nuChi0Eigscomm, RPA.nuChi0EigsBridgeComm, RPA.nuChi0EigscommIndex, RPA.rank0nuChi0EigscommInWorld, RPA.k1, RPA.k2, RPA.k3, RPA.kPqSymList, RPA.Nkpts_sym);
 
-    chebyshev_filtering(&SPARC, &RPA);
+    initialize_deltaVs(&SPARC, &RPA);
+
+    int testFlag = 1;
+    if (testFlag) {
+        test_Hx_nuChi0(&SPARC, &RPA);
+    }
+
+    for (int qptIndex = 0; qptIndex < RPA.Nqpts_sym; qptIndex++) {
+        for (int omegaIndex = 0; omegaIndex < RPA.Nomega; omegaIndex++) {
+            chebyshev_filtering(&SPARC, &RPA, qptIndex, omegaIndex);
+        }
+    }
 
     print_result(&RPA);
 

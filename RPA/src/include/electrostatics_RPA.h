@@ -4,13 +4,13 @@
 #include "main.h"
 #include "electrostatics_RPA.h"
 
-void collect_transfer_deltaRho(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA);
+void collect_transfer_deltaRho(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int nuChi0EigsAmount, int printFlag);
 
 void transfer_deltaRho(SPARC_OBJ *pSPARC, MPI_Comm nuChi0Eigscomm, double *rho_send, double *rho_recv);
 
 void transfer_deltaRho_kpt(SPARC_OBJ *pSPARC, MPI_Comm nuChi0Eigscomm, double _Complex *rho_send, double _Complex *rho_recv);
 
-void Calculate_deltaRhoPotential(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex);
+void Calculate_deltaRhoPotential(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int nuChi0EigsAmount, int printFlag);
 
 void Calculate_deltaRhoPotential_gamma(SPARC_OBJ *pSPARC, double *deltaVs_phi, double *rhs, int nuChi0EigsAmounts, int nuChi0EigscommIndex);
 
