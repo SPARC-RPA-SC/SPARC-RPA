@@ -27,7 +27,7 @@
  |  └──restore_eigval_occ
  ├──initialize_deltaVs
  ├──test_Hx_nuChi0
- ├──chebyshevFiltering 
+ ├──cheFSI_RPA
  |  ├──(if PDEP method is used) find_min_eigenvalue
  |  ├──sternheimer_solver (block_cocg or gmres, in linearSolver.c)
  |  |  ├──(if Gamma point) sternheimer_solver_gamma
@@ -50,7 +50,7 @@
 #include "main.h"
 #include "initialization_RPA.h"
 #include "restoreElectronicGroundState.h"
-#include "chebyshevFiltering.h"
+#include "cheFSI.h"
 #include "printResult.h"
 #include "finalization_RPA.h"
 
@@ -84,7 +84,7 @@ int main(int argc, char *argv[]) {
 
     for (int qptIndex = 0; qptIndex < RPA.Nqpts_sym; qptIndex++) {
         for (int omegaIndex = 0; omegaIndex < RPA.Nomega; omegaIndex++) {
-            chebyshev_filtering(&SPARC, &RPA, qptIndex, omegaIndex);
+            cheFSI_RPA(&SPARC, &RPA, qptIndex, omegaIndex);
         }
     }
 

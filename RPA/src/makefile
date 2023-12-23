@@ -102,7 +102,7 @@ SPARC_OBJSC = ../../src/initialization.o ../../src/readfiles.o ../../src/atomdat
         ../../src/cyclix/cyclix_stress.o 
 
 OBJSC = main.o initialization_SPARC.o initialization_RPA.o generateKgrid.o parallelization_RPA.o parallelization_SPARC.o \
-	restoreElectronicGroundState.o chebyshevFiltering.o sternheimerEquation.o linearSolvers.o electrostatics_RPA.o printResult.o \
+	restoreElectronicGroundState.o cheFSI.o sternheimerEquation.o linearSolvers.o electrostatics_RPA.o printResult.o \
         finalization_RPA.o tools_RPA.o
 
 LIBBASE = ../lib/rpacalc

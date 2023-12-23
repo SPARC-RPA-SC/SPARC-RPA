@@ -9,7 +9,7 @@
 
 #include "main.h"
 #include "restoreElectronicGroundState.h"
-#include "chebyshevFiltering.h"
+#include "cheFSI.h"
 #include "sternheimerEquation.h"
 #include "electrostatics_RPA.h"
 #include "tools_RPA.h"
@@ -29,28 +29,6 @@ void initialize_deltaVs(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA) {
                 Vector2Norm(pRPA->deltaVs_phi + i*pSPARC->Nd_d, pSPARC->Nd_d, &vec2norm, pSPARC->dmcomm_phi);
                 VectorScale(pRPA->deltaVs_phi + i*pSPARC->Nd_d, pSPARC->Nd_d, 1.0/vec2norm, pSPARC->dmcomm_phi); // unify the length of \Delta V
             }
-            Transfer_Veff_loc_RPA(pSPARC, pRPA->nuChi0Eigscomm, pRPA->deltaVs_phi + i*pSPARC->Nd_d, pRPA->deltaVs + i * pSPARC->Nd_d_dmcomm); // it tansfer \Delta V at here
-            if ((pRPA->nuChi0EigscommIndex == pRPA->npnuChi0Neig - 1) && (pSPARC->spincomm_index == 0) && (pSPARC->bandcomm_index == 0) && (pSPARC->dmcomm != MPI_COMM_NULL)) { // print all \Delta V vectors of the last nuChi0Eigscomm.
-                // the code is only for cases without domain parallelization. In the case with domain parallelization, it needs to be modified by parallel output
-                // only one processor print
-                int dmcommRank;
-                MPI_Comm_rank(pSPARC->dmcomm, &dmcommRank);
-                if (dmcommRank == 0) {
-                    FILE *output1stDV = fopen("deltaVs.txt", "w");
-                    if (output1stDV ==  NULL) {
-                        printf("error printing delta Vs in test\n");
-                        exit(EXIT_FAILURE);
-                    } else {
-                        for (int nuChi0EigIndex = 0; nuChi0EigIndex < pRPA->nNuChi0Eigscomm; nuChi0EigIndex++) {
-                            for (int index = 0; index < Nd; index++) {
-                                fprintf(output1stDV, "%12.9f\n", pRPA->deltaVs[nuChi0EigIndex*Nd + index]);
-                            }
-                            fprintf(output1stDV, "\n");
-                        }
-                    }
-                    fclose(output1stDV);
-                }
-            }
         }
     }
     else {
@@ -59,28 +37,6 @@ void initialize_deltaVs(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA) {
                 SeededRandVec_complex(pRPA->deltaVs_kpt_phi + i*pSPARC->Nd_d, pSPARC->DMVertices, gridsizes, -0.5, 0.5, seed_offset + Nd * (pRPA->nuChi0EigsStartIndex + i)); // deltaVs vectors are not normalized.
                 Vector2Norm_complex(pRPA->deltaVs_kpt_phi + i*pSPARC->Nd_d, pSPARC->Nd_d, &vec2norm, pSPARC->dmcomm_phi);
                 VectorScaleComplex(pRPA->deltaVs_kpt_phi + i*pSPARC->Nd_d, pSPARC->Nd_d, 1.0/vec2norm, pSPARC->dmcomm_phi); // unify the length of \Delta V
-            }
-            Transfer_Veff_loc_RPA_kpt(pSPARC, pRPA->nuChi0Eigscomm, pRPA->deltaVs_kpt_phi + i*pSPARC->Nd_d, pRPA->deltaVs_kpt + i * pSPARC->Nd_d_dmcomm);
-            if ((pRPA->nuChi0EigscommIndex == pRPA->npnuChi0Neig - 1) && (pSPARC->spincomm_index == 0) && (pSPARC->kptcomm_index == 0) && (pSPARC->bandcomm_index == 0) && (pSPARC->dmcomm != MPI_COMM_NULL)) { // print the first \Delta V vector of the last nuChi0Eigscomm.
-                // the code is only for cases without domain parallelization. In the case with domain parallelization, it needs to be modified by parallel output
-                // only one processor print
-                int dmcommRank;
-                MPI_Comm_rank(pSPARC->dmcomm, &dmcommRank);
-                if (dmcommRank == 0) {
-                    FILE *output1stDV = fopen("deltaVs_kpt.txt", "w");
-                    if (output1stDV ==  NULL) {
-                        printf("error printing delta Vs in test\n");
-                        exit(EXIT_FAILURE);
-                    } else {
-                        for (int nuChi0EigIndex = 0; nuChi0EigIndex < pRPA->nNuChi0Eigscomm; nuChi0EigIndex++) {
-                            for (int index = 0; index < Nd; index++) {
-                                fprintf(output1stDV, "%12.9f %12.9f\n", creal(pRPA->deltaVs_kpt[nuChi0EigIndex*Nd + index]), cimag(pRPA->deltaVs_kpt[nuChi0EigIndex*Nd + index]));
-                            }
-                            fprintf(output1stDV, "\n");
-                        }
-                    }
-                    fclose(output1stDV);
-                }
             }
         }
     }
@@ -115,6 +71,58 @@ void test_Hx_nuChi0(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA) {
             qptIndex = pRPA->Nqpts_sym - 1;
         if (omegaIndex > pRPA->Nomega - 1)
             omegaIndex = pRPA->Nomega - 1;
+        int Nd_d_dmcomm = pSPARC->Nd_d_dmcomm;
+        if (pSPARC->isGammaPoint) {
+            for (int nuChi0EigIndex = 0; nuChi0EigIndex < pRPA->nNuChi0Eigscomm; nuChi0EigIndex++) {
+                Transfer_Veff_loc_RPA(pSPARC, pRPA->nuChi0Eigscomm, pRPA->deltaVs_phi + nuChi0EigIndex*pSPARC->Nd_d, pRPA->deltaVs + nuChi0EigIndex*pSPARC->Nd_d_dmcomm); // it tansfer \Delta V at here
+            }
+            if ((pRPA->nuChi0EigscommIndex == pRPA->npnuChi0Neig - 1) && (pSPARC->spincomm_index == 0) && (pSPARC->bandcomm_index == 0) && (pSPARC->dmcomm != MPI_COMM_NULL)) { // print all \Delta V vectors of the last nuChi0Eigscomm.
+                // the code is only for cases without domain parallelization. In the case with domain parallelization, it needs to be modified by parallel output
+                // only one processor print
+                int dmcommRank;
+                MPI_Comm_rank(pSPARC->dmcomm, &dmcommRank);
+                if (dmcommRank == 0) {
+                    FILE *output1stDV = fopen("deltaVs.txt", "w");
+                    if (output1stDV ==  NULL) {
+                        printf("error printing delta Vs in test\n");
+                        exit(EXIT_FAILURE);
+                    } else {
+                        for (int nuChi0EigIndex = 0; nuChi0EigIndex < pRPA->nNuChi0Eigscomm; nuChi0EigIndex++) {
+                            for (int index = 0; index < Nd_d_dmcomm; index++) {
+                                fprintf(output1stDV, "%12.9f\n", pRPA->deltaVs[nuChi0EigIndex*Nd_d_dmcomm + index]);
+                            }
+                            fprintf(output1stDV, "\n");
+                        }
+                    }
+                    fclose(output1stDV);
+                }
+            }
+        } else {
+            for (int nuChi0EigIndex = 0; nuChi0EigIndex < pRPA->nNuChi0Eigscomm; nuChi0EigIndex++) {
+                Transfer_Veff_loc_RPA_kpt(pSPARC, pRPA->nuChi0Eigscomm, pRPA->deltaVs_kpt_phi + nuChi0EigIndex*pSPARC->Nd_d, pRPA->deltaVs_kpt + nuChi0EigIndex*pSPARC->Nd_d_dmcomm); // it tansfer \Delta V at here
+            }
+            if ((pRPA->nuChi0EigscommIndex == pRPA->npnuChi0Neig - 1) && (pSPARC->spincomm_index == 0) && (pSPARC->kptcomm_index == 0) && (pSPARC->bandcomm_index == 0) && (pSPARC->dmcomm != MPI_COMM_NULL)) { // print the first \Delta V vector of the last nuChi0Eigscomm.
+                // the code is only for cases without domain parallelization. In the case with domain parallelization, it needs to be modified by parallel output
+                // only one processor print
+                int dmcommRank;
+                MPI_Comm_rank(pSPARC->dmcomm, &dmcommRank);
+                if (dmcommRank == 0) {
+                    FILE *output1stDV = fopen("deltaVs_kpt.txt", "w");
+                    if (output1stDV ==  NULL) {
+                        printf("error printing delta Vs in test\n");
+                        exit(EXIT_FAILURE);
+                    } else {
+                        for (int nuChi0EigIndex = 0; nuChi0EigIndex < pRPA->nNuChi0Eigscomm; nuChi0EigIndex++) {
+                            for (int index = 0; index < Nd_d_dmcomm; index++) {
+                                fprintf(output1stDV, "%12.9f %12.9f\n", creal(pRPA->deltaVs_kpt[nuChi0EigIndex*Nd_d_dmcomm + index]), cimag(pRPA->deltaVs_kpt[nuChi0EigIndex*Nd_d_dmcomm + index]));
+                            }
+                            fprintf(output1stDV, "\n");
+                        }
+                    }
+                    fclose(output1stDV);
+                }
+            }
+        }
         if (!flagNoDmcomm) {
             sternheimer_solver(pSPARC, pRPA, qptIndex, omegaIndex, nuChi0EigsAmount, printFlag);
         }
@@ -285,7 +293,7 @@ void sternheimer_solver(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int omeg
     #endif
 }
 
-void chebyshev_filtering(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int omegaIndex) {
+void cheFSI_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int omegaIndex) {
     int nuChi0EigscommIndex = pRPA->nuChi0EigscommIndex;
     if (nuChi0EigscommIndex == -1)
         return;
@@ -299,28 +307,29 @@ void chebyshev_filtering(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int ome
         minEig = find_min_eigenvalue(pSPARC, pRPA, qptIndex, omegaIndex, flagNoDmcomm);
     }
     MPI_Bcast(&minEig, 1, MPI_DOUBLE, 0, pRPA->nuChi0EigsBridgeComm);
+    double tolErpaTermConverge = pRPA->tol_ErpaConverge * pRPA->qptWts[qptIndex] * pRPA->omegaWts[omegaIndex];
+    int flagCheb = 1;
+    int ncheb = 0;
+    int chebyshevDegree = 2;
+    // while (flagCheb) {
+        
+    // }
 }
 
 double find_min_eigenvalue(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int omegaIndex, int flagNoDmcomm) { // find min eigenvalue by power method
     int rank;
     MPI_Comm_rank(pRPA->nuChi0Eigscomm, &rank);
     double minEig = 0.0;
-    double vec2norm = 0.0;
+    double vec2norm = 1.0;
     int loopFlag = 1;
     int maxIter = 30;
     int iter = 0;
+    int nuChi0EigsAmount = 1;
+    int printFlag = 0;
     while (loopFlag) {
         if (pSPARC->isGammaPoint) {
-            if (pSPARC->dmcomm_phi != MPI_COMM_NULL) {
-                Vector2Norm(pRPA->deltaVs_phi, pSPARC->Nd_d, &vec2norm, pSPARC->dmcomm_phi);
-                VectorScale(pRPA->deltaVs_phi, pSPARC->Nd_d, 1.0/vec2norm, pSPARC->dmcomm_phi);
-            }
             Transfer_Veff_loc_RPA(pSPARC, pRPA->nuChi0Eigscomm, pRPA->deltaVs_phi, pRPA->deltaVs);
         } else {
-            if (pSPARC->dmcomm_phi != MPI_COMM_NULL) {
-                Vector2Norm_complex(pRPA->deltaVs_kpt_phi, pSPARC->Nd_d, &vec2norm, pSPARC->dmcomm_phi);
-                VectorScaleComplex(pRPA->deltaVs_kpt_phi, pSPARC->Nd_d, 1.0/vec2norm, pSPARC->dmcomm_phi);
-            }
             Transfer_Veff_loc_RPA_kpt(pSPARC, pRPA->nuChi0Eigscomm, pRPA->deltaVs_kpt_phi, pRPA->deltaVs_kpt);
         }
         if ((fabs(-vec2norm - minEig) < 2e-4) || (iter == maxIter) || (!pSPARC->isGammaPoint)) { // current kpt calculation is not available
@@ -328,10 +337,21 @@ double find_min_eigenvalue(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int o
         }
         minEig = -vec2norm;
         if (!flagNoDmcomm) {
-            sternheimer_solver(pSPARC, pRPA, qptIndex, omegaIndex, 1, 0);
+            sternheimer_solver(pSPARC, pRPA, qptIndex, omegaIndex, nuChi0EigsAmount, printFlag);
         }
-        collect_transfer_deltaRho(pSPARC, pRPA, 1, 0);
-        Calculate_deltaRhoPotential(pSPARC, pRPA, qptIndex, 1, 0);
+        collect_transfer_deltaRho(pSPARC, pRPA, nuChi0EigsAmount, printFlag);
+        Calculate_deltaRhoPotential(pSPARC, pRPA, qptIndex, nuChi0EigsAmount, printFlag);
+        if (pSPARC->isGammaPoint) {
+            if (pSPARC->dmcomm_phi != MPI_COMM_NULL) {
+                Vector2Norm(pRPA->deltaVs_phi, pSPARC->Nd_d, &vec2norm, pSPARC->dmcomm_phi);
+                VectorScale(pRPA->deltaVs_phi, pSPARC->Nd_d, 1.0/vec2norm, pSPARC->dmcomm_phi);
+            }
+        } else {
+            if (pSPARC->dmcomm_phi != MPI_COMM_NULL) {
+                Vector2Norm_complex(pRPA->deltaVs_kpt_phi, pSPARC->Nd_d, &vec2norm, pSPARC->dmcomm_phi);
+                VectorScaleComplex(pRPA->deltaVs_kpt_phi, pSPARC->Nd_d, 1.0/vec2norm, pSPARC->dmcomm_phi);
+            }
+        }
         iter++;
     }
     if (iter == maxIter) printf("qpt %d, omega %d, minimum eigenvalue does not reach the required accuracy.\n", qptIndex, omegaIndex);

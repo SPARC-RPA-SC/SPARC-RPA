@@ -53,18 +53,11 @@ typedef struct _RPA_OBJ {
     double *q1;
     double *q2;
     double *q3;
-    double *qptWts_loc;
-    double *q1_loc;
-    double *q2_loc;
-    double *q3_loc;
     // omegas, which is integral points and weights from [0, +\infty]
     int Nomega;
-    int omega_start_indx;
-    int omega_end_indx;
     double *omega;
     double *omega01;
     double *omegaWts;
-    double *omegaWts_loc;
     // amount of eigenvalues of \nu\chi0 to be solved
     int nuChi0Neig;
     // symmetric reduced k-point grid, saved for reading orbitals
