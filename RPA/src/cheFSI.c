@@ -97,6 +97,11 @@ void test_Hx_nuChi0(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA) {
                     fclose(output1stDV);
                 }
             }
+            if (!flagNoDmcomm) {
+                sternheimer_eq_gamma(pSPARC, pRPA, qptIndex, omegaIndex, nuChi0EigsAmount, printFlag);
+            }
+            collect_transfer_deltaRho_gamma(pSPARC, pRPA->deltaRhos, pRPA->deltaRhos_phi, nuChi0EigsAmount, printFlag, pRPA->nuChi0Eigscomm);
+            Calculate_deltaRhoPotential_gamma(pSPARC, pRPA->deltaRhos_phi, pRPA->deltaVs_phi, nuChi0EigsAmount, printFlag, pRPA->deltaVs, pRPA->nuChi0EigscommIndex, pRPA->nuChi0Eigscomm);
         } else {
             for (int nuChi0EigIndex = 0; nuChi0EigIndex < pRPA->nNuChi0Eigscomm; nuChi0EigIndex++) {
                 Transfer_Veff_loc_RPA_kpt(pSPARC, pRPA->nuChi0Eigscomm, pRPA->deltaVs_kpt_phi + nuChi0EigIndex*pSPARC->Nd_d, pRPA->deltaVs_kpt + nuChi0EigIndex*pSPARC->Nd_d_dmcomm); // it tansfer \Delta V at here
@@ -122,12 +127,13 @@ void test_Hx_nuChi0(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA) {
                     fclose(output1stDV);
                 }
             }
+            if (!flagNoDmcomm) {
+                sternheimer_eq_kpt(pSPARC, pRPA, qptIndex, omegaIndex, nuChi0EigsAmount, printFlag);
+            }
+            collect_transfer_deltaRho_kpt(pSPARC, pRPA->deltaRhos_kpt, pRPA->deltaRhos_kpt_phi, nuChi0EigsAmount, printFlag, pRPA->nuChi0Eigscomm);
+            double qptx = pRPA->q1[qptIndex]; double qpty = pRPA->q2[qptIndex]; double qptz = pRPA->q3[qptIndex];
+            Calculate_deltaRhoPotential_kpt(pSPARC, pRPA->deltaRhos_kpt_phi, pRPA->deltaVs_kpt_phi, qptx, qpty, qptz, nuChi0EigsAmount, printFlag, pRPA->nuChi0EigscommIndex, pRPA->nuChi0Eigscomm);
         }
-        if (!flagNoDmcomm) {
-            sternheimer_solver(pSPARC, pRPA, qptIndex, omegaIndex, nuChi0EigsAmount, printFlag);
-        }
-        collect_transfer_deltaRho(pSPARC, pRPA, nuChi0EigsAmount, printFlag);
-        Calculate_deltaRhoPotential(pSPARC, pRPA, qptIndex, nuChi0EigsAmount, printFlag);
     }
 }
 
@@ -177,123 +183,12 @@ void test_Hx(SPARC_OBJ *pSPARC, double *testHxAccuracy)
     }
 }
 
-void sternheimer_solver(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int omegaIndex, int nuChi0EigsAmount, int printFlag) // compute \Delta\rho by solving Sternheimer equations in all pSPARC->dmcomm s
-{
-    #ifdef DEBUG
-    int rank;
-    MPI_Comm_rank(pRPA->nuChi0Eigscomm, &rank);
-    double t1 = MPI_Wtime();
-    #endif
-    int DMndsp = pSPARC->Nd_d_dmcomm * pSPARC->Nspinor_spincomm;
-    int ncol = pSPARC->Nband_bandcomm;
-    int Nkpts_kptcomm = pSPARC->Nkpts_kptcomm;
-    if (pSPARC->isGammaPoint) {   
-        double *sternSolverAccuracy = (double *)calloc(sizeof(double), pSPARC->Nkpts_kptcomm * pSPARC->Nspin_spincomm * pSPARC->Nband_bandcomm); // the sum of 2-norm of residuals of all Sternheimer eq.s assigned in this processor
-        for (int index = 0; index < pSPARC->Nd_d_dmcomm * nuChi0EigsAmount; index++) {
-            pRPA->deltaRhos[index] = 0.0;
-        }
-        for (int spn_i = 0; spn_i < pSPARC->Nspin_spincomm; spn_i++) {
-            for (int bandIndex = 0; bandIndex < ncol; bandIndex++) {
-                double epsilon = pSPARC->lambda[spn_i * ncol + bandIndex];
-                double *psi = pSPARC->Xorb + bandIndex * DMndsp + spn_i * pSPARC->Nd_d_dmcomm;
-                double bandWeight = pSPARC->occfac * pSPARC->occ[spn_i * ncol + bandIndex]; // occfac contains spin factor
-                if (printFlag) {
-                    char orbitalFileName[100];
-                    snprintf(orbitalFileName, 100, "psi_band%d_spin%d.orbit", pSPARC->band_start_indx + bandIndex, pSPARC->spin_start_indx + spn_i);
-                    FILE *outputPsi = fopen(orbitalFileName, "w");
-                    if (outputPsi ==  NULL) {
-                        printf("error printing psi band %d, spin %d\n", pSPARC->band_start_indx + bandIndex, pSPARC->spin_start_indx + spn_i);
-                        exit(EXIT_FAILURE);
-                    } else {
-                        for (int index = 0; index < pSPARC->Nd_d_dmcomm; index++) {
-                            fprintf(outputPsi, "%12.9f\n", psi[index]);
-                        }
-                    }
-                    fclose(outputPsi);
-                }
-                sternSolverAccuracy[spn_i * ncol + bandIndex] = sternheimer_solver_gamma(pSPARC, spn_i, epsilon, pRPA->omega[omegaIndex], pRPA->deltaPsisReal, pRPA->deltaPsisImag, pRPA->deltaVs, psi, bandWeight, pRPA->deltaRhos, nuChi0EigsAmount);
-                printf("spn_i %d, globalBandIndex %d, omegaIndex %d, stern res norm %.6E\n", spn_i, bandIndex + pSPARC->band_start_indx, omegaIndex, sternSolverAccuracy[spn_i * ncol + bandIndex]);
-                // print the \Delta \psi vector from the first \Delta V.
-                // the code is only for cases without domain parallelization. In the case with domain parallelization, it needs to be modified by parallel output
-                if (printFlag) {
-                    char deltaOrbitalFileName[100];
-                    snprintf(deltaOrbitalFileName, 100, "Dpsi_band%d_spin%d.orbit", pSPARC->band_start_indx + bandIndex, pSPARC->spin_start_indx + spn_i);
-                    FILE *outputDpsi = fopen(deltaOrbitalFileName, "w");
-                    if (outputDpsi ==  NULL) {
-                        printf("error printing delta psi band %d, spin %d\n", pSPARC->band_start_indx + bandIndex, pSPARC->spin_start_indx + spn_i);
-                        exit(EXIT_FAILURE);
-                    } else {
-                        for (int nuChi0EigIndex = 0; nuChi0EigIndex < nuChi0EigsAmount; nuChi0EigIndex++) {
-                            for (int index = 0; index < pSPARC->Nd_d_dmcomm; index++) {
-                                fprintf(outputDpsi, "%12.9f %12.9f\n", pRPA->deltaPsisReal[nuChi0EigIndex*pSPARC->Nd_d_dmcomm + index], pRPA->deltaPsisImag[nuChi0EigIndex*pSPARC->Nd_d_dmcomm + index]);
-                            }
-                            fprintf(outputDpsi, "\n");
-                        }
-                    }
-                    fclose(outputDpsi);
-                }
-            }
-        }
-        free(sternSolverAccuracy);
-    }
-    else {
-        double *sternSolverAccuracy = (double *)calloc(sizeof(double), pSPARC->Nkpts_kptcomm * pSPARC->Nspin_spincomm * pSPARC->Nband_bandcomm); // the sum of norm of residuals of two Sternheimer eq.s
-        for (int index = 0; index < pSPARC->Nd_d_dmcomm * nuChi0EigsAmount; index++) {
-            pRPA->deltaRhos_kpt[index] = 0.0;
-        }
-        for (int spn_i = 0; spn_i < pSPARC->Nspin_spincomm; spn_i++) {
-            for (int kpt = 0; kpt < Nkpts_kptcomm; kpt++) {
-                int kg = kpt + pSPARC->kpt_start_indx;
-                int kPq = pRPA->kPqList[kg][qptIndex];
-                int kMq = pRPA->kMqList[kg][qptIndex];
-                for (int bandIndex = 0; bandIndex < ncol; bandIndex++) {
-                    double epsilon = pSPARC->lambda[spn_i * Nkpts_kptcomm * ncol + kpt * ncol + bandIndex];
-                    double _Complex *psi_kpt = pSPARC->Xorb_kpt + kpt * ncol * DMndsp + bandIndex * DMndsp + spn_i * pSPARC->Nd_d_dmcomm;
-                    double bandWeight = pSPARC->occfac * (pSPARC->kptWts_loc[kpt] / pSPARC->Nkpts) * pSPARC->occ[spn_i * Nkpts_kptcomm * ncol + kpt * ncol + bandIndex];
-                    char orbitalFileName[100];
-                    snprintf(orbitalFileName, 100, "psi_kpt%d_band%d_spin%d.orbit", pSPARC->kpt_start_indx + kpt, pSPARC->band_start_indx + bandIndex, pSPARC->spin_start_indx + spn_i);
-                    FILE *outputPsi = fopen(orbitalFileName, "w");
-                    if (outputPsi ==  NULL) {
-                        printf("error printing psi band %d, spin %d\n", pSPARC->band_start_indx + bandIndex, pSPARC->spin_start_indx + spn_i);
-                        exit(EXIT_FAILURE);
-                    } else {
-                        for (int index = 0; index < pSPARC->Nd_d_dmcomm; index++) {
-                            fprintf(outputPsi, "%12.9f %12.9f\n", creal(psi_kpt[index]), cimag(psi_kpt[index]));
-                        }
-                    }
-                    fclose(outputPsi);
-                    sternSolverAccuracy[spn_i * Nkpts_kptcomm * ncol + kpt * ncol + bandIndex] = sternheimer_solver_kpt(pSPARC, spn_i, kPq, kMq, epsilon, 
-                         pRPA->omega[omegaIndex], pRPA->deltaPsis_kpt, pRPA->deltaVs_kpt, psi_kpt, bandWeight, pRPA->deltaRhos_kpt, nuChi0EigsAmount); // solve the two Sternheimer eq.s (-i\omega and +i\omega) together
-                    printf("spn_i %d, globalKpt %d, globalBandIndex %d, omegaIndex %d, +-omega, stern res norm %.6E\n", spn_i, kpt + pSPARC->kpt_start_indx, bandIndex + pSPARC->band_start_indx, 
-                         omegaIndex, sternSolverAccuracy[spn_i*Nkpts_kptcomm*ncol + kpt*ncol + bandIndex]);
-
-                    char deltaOrbitalFileName[100];
-                    snprintf(deltaOrbitalFileName, 100, "Dpsi_kpt%d_band%d_spin%d_-omega.orbit", pSPARC->kpt_start_indx + kpt, pSPARC->band_start_indx + bandIndex, pSPARC->spin_start_indx + spn_i);
-                    FILE *outputDpsiMinus = fopen(deltaOrbitalFileName, "w");
-                    snprintf(deltaOrbitalFileName, 100, "Dpsi_kpt%d_band%d_spin%d_+omega.orbit", pSPARC->kpt_start_indx + kpt, pSPARC->band_start_indx + bandIndex, pSPARC->spin_start_indx + spn_i);
-                    FILE *outputDpsiPlus = fopen(deltaOrbitalFileName, "w");
-                    if ((outputDpsiMinus ==  NULL) || (outputDpsiPlus ==  NULL)) {
-                        printf("error printing delta psi kpt %d, band %d, spin %d\n", pSPARC->kpt_start_indx + kpt, pSPARC->band_start_indx + bandIndex, pSPARC->spin_start_indx + spn_i);
-                        exit(EXIT_FAILURE);
-                    }
-                    for (int index = 0; index < pSPARC->Nd_d_dmcomm; index++) { // print \Delta psi for the last \Delta V
-                        fprintf(outputDpsiMinus, "%12.9f %12.9f\n", creal(pRPA->deltaPsis_kpt[index]), cimag(pRPA->deltaPsis_kpt[index]));
-                        fprintf(outputDpsiPlus, "%12.9f %12.9f\n", creal(pRPA->deltaPsis_kpt[pSPARC->Nd_d_dmcomm + index]), cimag(pRPA->deltaPsis_kpt[pSPARC->Nd_d_dmcomm + index]));
-                    }
-                    fclose(outputDpsiMinus);
-                    fclose(outputDpsiPlus);
-                }
-            }
-        }
-        free(sternSolverAccuracy);
-    }
-    #ifdef DEBUG
-    double t2 = MPI_Wtime();
-    if (!rank) printf("nuChi0Eigscomm %d, solve %d delta Vs for all bands, spent %.3f ms\n", pRPA->nuChi0EigscommIndex, nuChi0EigsAmount, (t2 - t1)*1e3);
-    #endif
-}
 
 void cheFSI_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int omegaIndex) {
+    if (!pSPARC->isGammaPoint) {
+        printf("RPA kpt is under development\n");
+        return;
+    }
     int nuChi0EigscommIndex = pRPA->nuChi0EigscommIndex;
     if (nuChi0EigscommIndex == -1)
         return;
@@ -307,12 +202,13 @@ void cheFSI_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int omegaIndex) 
         minEig = find_min_eigenvalue(pSPARC, pRPA, qptIndex, omegaIndex, flagNoDmcomm);
     }
     MPI_Bcast(&minEig, 1, MPI_DOUBLE, 0, pRPA->nuChi0EigsBridgeComm);
+    double lambdaCutoff = -0.01;
     double tolErpaTermConverge = pRPA->tol_ErpaConverge * pRPA->qptWts[qptIndex] * pRPA->omegaWts[omegaIndex];
     int flagCheb = 1;
     int ncheb = 0;
     int chebyshevDegree = 2;
     // while (flagCheb) {
-        
+        chebyshev_filtering(pSPARC, pRPA, qptIndex, omegaIndex, minEig, lambdaCutoff, chebyshevDegree, flagNoDmcomm);
     // }
 }
 
@@ -329,24 +225,31 @@ double find_min_eigenvalue(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int o
     while (loopFlag) {
         if (pSPARC->isGammaPoint) {
             Transfer_Veff_loc_RPA(pSPARC, pRPA->nuChi0Eigscomm, pRPA->deltaVs_phi, pRPA->deltaVs);
-        } else {
-            Transfer_Veff_loc_RPA_kpt(pSPARC, pRPA->nuChi0Eigscomm, pRPA->deltaVs_kpt_phi, pRPA->deltaVs_kpt);
-        }
-        if ((fabs(-vec2norm - minEig) < 2e-4) || (iter == maxIter) || (!pSPARC->isGammaPoint)) { // current kpt calculation is not available
-            loopFlag = 0;
-        }
-        minEig = -vec2norm;
-        if (!flagNoDmcomm) {
-            sternheimer_solver(pSPARC, pRPA, qptIndex, omegaIndex, nuChi0EigsAmount, printFlag);
-        }
-        collect_transfer_deltaRho(pSPARC, pRPA, nuChi0EigsAmount, printFlag);
-        Calculate_deltaRhoPotential(pSPARC, pRPA, qptIndex, nuChi0EigsAmount, printFlag);
-        if (pSPARC->isGammaPoint) {
+            if ((fabs(-vec2norm - minEig) < 2e-4) || (iter == maxIter) || (!pSPARC->isGammaPoint)) { // current kpt calculation is not available
+                loopFlag = 0;
+            }
+            minEig = -vec2norm;
+            if (!flagNoDmcomm) {
+                sternheimer_eq_gamma(pSPARC, pRPA, qptIndex, omegaIndex, nuChi0EigsAmount, printFlag);
+            }
+            collect_transfer_deltaRho_gamma(pSPARC, pRPA->deltaRhos, pRPA->deltaRhos_phi, nuChi0EigsAmount, printFlag, pRPA->nuChi0Eigscomm);
+            Calculate_deltaRhoPotential_gamma(pSPARC, pRPA->deltaRhos_phi, pRPA->deltaVs_phi, nuChi0EigsAmount, printFlag, pRPA->deltaVs, pRPA->nuChi0EigscommIndex, pRPA->nuChi0Eigscomm);
             if (pSPARC->dmcomm_phi != MPI_COMM_NULL) {
                 Vector2Norm(pRPA->deltaVs_phi, pSPARC->Nd_d, &vec2norm, pSPARC->dmcomm_phi);
                 VectorScale(pRPA->deltaVs_phi, pSPARC->Nd_d, 1.0/vec2norm, pSPARC->dmcomm_phi);
             }
         } else {
+            Transfer_Veff_loc_RPA_kpt(pSPARC, pRPA->nuChi0Eigscomm, pRPA->deltaVs_kpt_phi, pRPA->deltaVs_kpt);
+            if ((fabs(-vec2norm - minEig) < 2e-4) || (iter == maxIter) || (!pSPARC->isGammaPoint)) { // current kpt calculation is not available
+                loopFlag = 0;
+            }
+            minEig = -vec2norm;
+            if (!flagNoDmcomm) {
+                sternheimer_eq_kpt(pSPARC, pRPA, qptIndex, omegaIndex, nuChi0EigsAmount, printFlag);
+            }
+            collect_transfer_deltaRho_kpt(pSPARC, pRPA->deltaRhos_kpt, pRPA->deltaRhos_kpt_phi, nuChi0EigsAmount, printFlag, pRPA->nuChi0Eigscomm);
+            double qptx = pRPA->q1[qptIndex]; double qpty = pRPA->q2[qptIndex]; double qptz = pRPA->q3[qptIndex];
+            Calculate_deltaRhoPotential_kpt(pSPARC, pRPA->deltaRhos_kpt_phi, pRPA->deltaVs_kpt_phi, qptx, qpty, qptz, nuChi0EigsAmount, printFlag, pRPA->nuChi0EigscommIndex, pRPA->nuChi0Eigscomm);
             if (pSPARC->dmcomm_phi != MPI_COMM_NULL) {
                 Vector2Norm_complex(pRPA->deltaVs_kpt_phi, pSPARC->Nd_d, &vec2norm, pSPARC->dmcomm_phi);
                 VectorScaleComplex(pRPA->deltaVs_kpt_phi, pSPARC->Nd_d, 1.0/vec2norm, pSPARC->dmcomm_phi);
@@ -359,4 +262,30 @@ double find_min_eigenvalue(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int o
     if (!rank) printf("qpt %d, omega %d, iterated for %d times, found minEig %.5E\n", qptIndex, omegaIndex, iter, minEig);
     #endif
     return minEig;
+}
+
+void chebyshev_filtering(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int omegaIndex, double minEig, double lambdaCutoff, int chebyshevDegree, int flagNoDmcomm) {
+    double maxEig = -minEig;
+    double e = (maxEig - lambdaCutoff) / 2.0;
+    double c = (lambdaCutoff + maxEig) / 2.0;
+    double sigma = e / (c - minEig);
+    double tau = 2.0 / sigma;
+    int nuChi0EigsAmount = pRPA->nNuChi0Eigscomm;
+
+    // int printFlag = 0;
+    // if (pSPARC->isGammaPoint) {
+    //     for (int nuChi0EigIndex = 0; nuChi0EigIndex < nuChi0EigsAmount; nuChi0EigIndex++) {
+    //         Transfer_Veff_loc_RPA(pSPARC, pRPA->nuChi0Eigscomm, pRPA->deltaVs_phi + nuChi0EigIndex*pSPARC->Nd_d, pRPA->deltaVs + nuChi0EigIndex*pSPARC->Nd_d_dmcomm); // it tansfer \Delta V at here
+    //     }
+    // } else {
+    //     for (int nuChi0EigIndex = 0; nuChi0EigIndex < pRPA->nNuChi0Eigscomm; nuChi0EigIndex++) {
+    //         Transfer_Veff_loc_RPA_kpt(pSPARC, pRPA->nuChi0Eigscomm, pRPA->deltaVs_kpt_phi + nuChi0EigIndex*pSPARC->Nd_d, pRPA->deltaVs_kpt + nuChi0EigIndex*pSPARC->Nd_d_dmcomm); // it tansfer \Delta V at here
+    //     }
+    // }
+    // if (!flagNoDmcomm) {
+    //     sternheimer_solver(pSPARC, pRPA, qptIndex, omegaIndex, nuChi0EigsAmount, printFlag);
+    // }
+    // collect_transfer_deltaRho(pSPARC, pRPA, nuChi0EigsAmount, printFlag);
+    // Calculate_deltaRhoPotential(pSPARC, pRPA, qptIndex, nuChi0EigsAmount, printFlag);
+
 }

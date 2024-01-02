@@ -12,6 +12,135 @@
 #include "linearSolvers.h"
 #include "sternheimerEquation.h"
 
+void sternheimer_eq_gamma(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int omegaIndex, int nuChi0EigsAmount, int printFlag) // compute \Delta\rho by solving Sternheimer equations in all pSPARC->dmcomm s
+{
+    #ifdef DEBUG
+    int rank;
+    MPI_Comm_rank(pRPA->nuChi0Eigscomm, &rank);
+    double t1 = MPI_Wtime();
+    #endif
+    int DMndsp = pSPARC->Nd_d_dmcomm * pSPARC->Nspinor_spincomm;
+    int ncol = pSPARC->Nband_bandcomm;
+
+    double *sternSolverAccuracy = (double *)calloc(sizeof(double), pSPARC->Nspin_spincomm * pSPARC->Nband_bandcomm); // the sum of 2-norm of residuals of all Sternheimer eq.s assigned in this processor
+    for (int index = 0; index < pSPARC->Nd_d_dmcomm * nuChi0EigsAmount; index++) {
+        pRPA->deltaRhos[index] = 0.0;
+    }
+    for (int spn_i = 0; spn_i < pSPARC->Nspin_spincomm; spn_i++) {
+        for (int bandIndex = 0; bandIndex < ncol; bandIndex++) {
+            double epsilon = pSPARC->lambda[spn_i * ncol + bandIndex];
+            double *psi = pSPARC->Xorb + bandIndex * DMndsp + spn_i * pSPARC->Nd_d_dmcomm;
+            double bandWeight = pSPARC->occfac * pSPARC->occ[spn_i * ncol + bandIndex]; // occfac contains spin factor
+            if (printFlag) {
+                char orbitalFileName[100];
+                snprintf(orbitalFileName, 100, "psi_band%d_spin%d.orbit", pSPARC->band_start_indx + bandIndex, pSPARC->spin_start_indx + spn_i);
+                FILE *outputPsi = fopen(orbitalFileName, "w");
+                if (outputPsi ==  NULL) {
+                    printf("error printing psi band %d, spin %d\n", pSPARC->band_start_indx + bandIndex, pSPARC->spin_start_indx + spn_i);
+                    exit(EXIT_FAILURE);
+                } else {
+                    for (int index = 0; index < pSPARC->Nd_d_dmcomm; index++) {
+                        fprintf(outputPsi, "%12.9f\n", psi[index]);
+                    }
+                }
+                fclose(outputPsi);
+            }
+            sternSolverAccuracy[spn_i * ncol + bandIndex] = sternheimer_solver_gamma(pSPARC, spn_i, epsilon, pRPA->omega[omegaIndex], pRPA->deltaPsisReal, pRPA->deltaPsisImag, pRPA->deltaVs, psi, bandWeight, pRPA->deltaRhos, nuChi0EigsAmount);
+            printf("spn_i %d, globalBandIndex %d, omegaIndex %d, stern res norm %.6E\n", spn_i, bandIndex + pSPARC->band_start_indx, omegaIndex, sternSolverAccuracy[spn_i * ncol + bandIndex]);
+            // print the \Delta \psi vector from the first \Delta V.
+            // the code is only for cases without domain parallelization. In the case with domain parallelization, it needs to be modified by parallel output
+            if (printFlag) {
+                char deltaOrbitalFileName[100];
+                snprintf(deltaOrbitalFileName, 100, "Dpsi_band%d_spin%d.orbit", pSPARC->band_start_indx + bandIndex, pSPARC->spin_start_indx + spn_i);
+                FILE *outputDpsi = fopen(deltaOrbitalFileName, "w");
+                if (outputDpsi ==  NULL) {
+                    printf("error printing delta psi band %d, spin %d\n", pSPARC->band_start_indx + bandIndex, pSPARC->spin_start_indx + spn_i);
+                    exit(EXIT_FAILURE);
+                } else {
+                    for (int nuChi0EigIndex = 0; nuChi0EigIndex < nuChi0EigsAmount; nuChi0EigIndex++) {
+                        for (int index = 0; index < pSPARC->Nd_d_dmcomm; index++) {
+                            fprintf(outputDpsi, "%12.9f %12.9f\n", pRPA->deltaPsisReal[nuChi0EigIndex*pSPARC->Nd_d_dmcomm + index], pRPA->deltaPsisImag[nuChi0EigIndex*pSPARC->Nd_d_dmcomm + index]);
+                        }
+                        fprintf(outputDpsi, "\n");
+                    }
+                }
+                fclose(outputDpsi);
+            }
+        }
+    }
+    free(sternSolverAccuracy);
+
+    #ifdef DEBUG
+    double t2 = MPI_Wtime();
+    if (!rank) printf("nuChi0Eigscomm %d, solve %d delta Vs for all bands, spent %.3f ms\n", pRPA->nuChi0EigscommIndex, nuChi0EigsAmount, (t2 - t1)*1e3);
+    #endif
+}
+
+void sternheimer_eq_kpt(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int omegaIndex, int nuChi0EigsAmount, int printFlag) { // compute \Delta\rho by solving Sternheimer equations in all pSPARC->dmcomm s
+    #ifdef DEBUG
+    int rank;
+    MPI_Comm_rank(pRPA->nuChi0Eigscomm, &rank);
+    double t1 = MPI_Wtime();
+    #endif
+    int DMndsp = pSPARC->Nd_d_dmcomm * pSPARC->Nspinor_spincomm;
+    int ncol = pSPARC->Nband_bandcomm;
+    int Nkpts_kptcomm = pSPARC->Nkpts_kptcomm;
+
+    double *sternSolverAccuracy = (double *)calloc(sizeof(double), pSPARC->Nkpts_kptcomm * pSPARC->Nspin_spincomm * pSPARC->Nband_bandcomm); // the sum of norm of residuals of two Sternheimer eq.s
+    for (int index = 0; index < pSPARC->Nd_d_dmcomm * nuChi0EigsAmount; index++) {
+        pRPA->deltaRhos_kpt[index] = 0.0;
+    }
+    for (int spn_i = 0; spn_i < pSPARC->Nspin_spincomm; spn_i++) {
+        for (int kpt = 0; kpt < Nkpts_kptcomm; kpt++) {
+            int kg = kpt + pSPARC->kpt_start_indx;
+            int kPq = pRPA->kPqList[kg][qptIndex];
+            int kMq = pRPA->kMqList[kg][qptIndex];
+            for (int bandIndex = 0; bandIndex < ncol; bandIndex++) {
+                double epsilon = pSPARC->lambda[spn_i * Nkpts_kptcomm * ncol + kpt * ncol + bandIndex];
+                double _Complex *psi_kpt = pSPARC->Xorb_kpt + kpt * ncol * DMndsp + bandIndex * DMndsp + spn_i * pSPARC->Nd_d_dmcomm;
+                double bandWeight = pSPARC->occfac * (pSPARC->kptWts_loc[kpt] / pSPARC->Nkpts) * pSPARC->occ[spn_i * Nkpts_kptcomm * ncol + kpt * ncol + bandIndex];
+                char orbitalFileName[100];
+                snprintf(orbitalFileName, 100, "psi_kpt%d_band%d_spin%d.orbit", pSPARC->kpt_start_indx + kpt, pSPARC->band_start_indx + bandIndex, pSPARC->spin_start_indx + spn_i);
+                FILE *outputPsi = fopen(orbitalFileName, "w");
+                if (outputPsi ==  NULL) {
+                    printf("error printing psi band %d, spin %d\n", pSPARC->band_start_indx + bandIndex, pSPARC->spin_start_indx + spn_i);
+                    exit(EXIT_FAILURE);
+                } else {
+                    for (int index = 0; index < pSPARC->Nd_d_dmcomm; index++) {
+                        fprintf(outputPsi, "%12.9f %12.9f\n", creal(psi_kpt[index]), cimag(psi_kpt[index]));
+                    }
+                }
+                fclose(outputPsi);
+                sternSolverAccuracy[spn_i * Nkpts_kptcomm * ncol + kpt * ncol + bandIndex] = sternheimer_solver_kpt(pSPARC, spn_i, kPq, kMq, epsilon, 
+                     pRPA->omega[omegaIndex], pRPA->deltaPsis_kpt, pRPA->deltaVs_kpt, psi_kpt, bandWeight, pRPA->deltaRhos_kpt, nuChi0EigsAmount); // solve the two Sternheimer eq.s (-i\omega and +i\omega) together
+                printf("spn_i %d, globalKpt %d, globalBandIndex %d, omegaIndex %d, +-omega, stern res norm %.6E\n", spn_i, kpt + pSPARC->kpt_start_indx, bandIndex + pSPARC->band_start_indx, 
+                     omegaIndex, sternSolverAccuracy[spn_i*Nkpts_kptcomm*ncol + kpt*ncol + bandIndex]);
+                char deltaOrbitalFileName[100];
+                snprintf(deltaOrbitalFileName, 100, "Dpsi_kpt%d_band%d_spin%d_-omega.orbit", pSPARC->kpt_start_indx + kpt, pSPARC->band_start_indx + bandIndex, pSPARC->spin_start_indx + spn_i);
+                FILE *outputDpsiMinus = fopen(deltaOrbitalFileName, "w");
+                snprintf(deltaOrbitalFileName, 100, "Dpsi_kpt%d_band%d_spin%d_+omega.orbit", pSPARC->kpt_start_indx + kpt, pSPARC->band_start_indx + bandIndex, pSPARC->spin_start_indx + spn_i);
+                FILE *outputDpsiPlus = fopen(deltaOrbitalFileName, "w");
+                if ((outputDpsiMinus ==  NULL) || (outputDpsiPlus ==  NULL)) {
+                    printf("error printing delta psi kpt %d, band %d, spin %d\n", pSPARC->kpt_start_indx + kpt, pSPARC->band_start_indx + bandIndex, pSPARC->spin_start_indx + spn_i);
+                    exit(EXIT_FAILURE);
+                }
+                for (int index = 0; index < pSPARC->Nd_d_dmcomm; index++) { // print \Delta psi for the last \Delta V
+                    fprintf(outputDpsiMinus, "%12.9f %12.9f\n", creal(pRPA->deltaPsis_kpt[index]), cimag(pRPA->deltaPsis_kpt[index]));
+                    fprintf(outputDpsiPlus, "%12.9f %12.9f\n", creal(pRPA->deltaPsis_kpt[pSPARC->Nd_d_dmcomm + index]), cimag(pRPA->deltaPsis_kpt[pSPARC->Nd_d_dmcomm + index]));
+                }
+                fclose(outputDpsiMinus);
+                fclose(outputDpsiPlus);
+            }
+        }
+    }
+    free(sternSolverAccuracy);
+
+    #ifdef DEBUG
+    double t2 = MPI_Wtime();
+    if (!rank) printf("nuChi0Eigscomm %d, solve %d delta Vs for all bands, spent %.3f ms\n", pRPA->nuChi0EigscommIndex, nuChi0EigsAmount, (t2 - t1)*1e3);
+    #endif
+}
+
 double sternheimer_solver_gamma(SPARC_OBJ *pSPARC, int spn_i, double epsilon, double omega, double *deltaPsisReal, double *deltaPsisImag, double *deltaVs, double *psi, double bandWeight, double *deltaRhos, int nuChi0EigsAmounts)
 {
     void (*lhsfun)(SPARC_OBJ *, int, double, double, double *, double *, double _Complex *, int) = Sternheimer_lhs;

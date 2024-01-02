@@ -17,86 +17,90 @@
 #include "linearSolvers.h"
 #include "tools_RPA.h"
 
-void collect_transfer_deltaRho(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int nuChi0EigsAmount, int printFlag) {
+void collect_transfer_deltaRho_gamma(SPARC_OBJ *pSPARC, double *deltaRhos, double *deltaRhos_phi, int nuChi0EigsAmount, int printFlag, MPI_Comm nuChi0Eigscomm) {
     int DMnd = pSPARC->Nd_d_dmcomm;
     // int ncol = pSPARC->Nband_bandcomm;
     // int Nkpts_kptcomm = pSPARC->Nkpts_kptcomm;
     int flagNoDmcomm = (pSPARC->spincomm_index < 0 || pSPARC->kptcomm_index < 0 || pSPARC->bandcomm_index < 0 || pSPARC->dmcomm == MPI_COMM_NULL);
 
-    if (pSPARC->isGammaPoint) {
-        if (!flagNoDmcomm) {
-            // sum over spin comm group
-            if(pSPARC->npspin > 1) {        
-                MPI_Allreduce(MPI_IN_PLACE, pRPA->deltaRhos, nuChi0EigsAmount*DMnd, MPI_DOUBLE, MPI_SUM, pSPARC->spin_bridge_comm);        
-            }
-            // sum over all k-point groups
-            if (pSPARC->npkpt > 1) {            
-                MPI_Allreduce(MPI_IN_PLACE, pRPA->deltaRhos, nuChi0EigsAmount*DMnd, MPI_DOUBLE, MPI_SUM, pSPARC->kpt_bridge_comm);
-            }
-            // sum over all band groups 
-            if (pSPARC->npband) {
-                MPI_Allreduce(MPI_IN_PLACE, pRPA->deltaRhos, nuChi0EigsAmount*DMnd, MPI_DOUBLE, MPI_SUM, pSPARC->blacscomm);
-            }
-            if ((pSPARC->spincomm_index == 0) && (pSPARC->kptcomm_index == 0) && (pSPARC->bandcomm_index == 0) && printFlag) {
-                int dmcommRank;
-                MPI_Comm_rank(pSPARC->dmcomm, &dmcommRank);
-                if (dmcommRank == 0) {
-                    FILE *outputDrhos = fopen("deltaRhos.txt", "w");
-                    if (outputDrhos ==  NULL) {
-                        printf("error printing delta rho s in test\n");
-                        exit(EXIT_FAILURE);
-                    } else {
-                        for (int nuChi0EigIndex = 0; nuChi0EigIndex < pRPA->nNuChi0Eigscomm; nuChi0EigIndex++) {
-                            for (int index = 0; index < DMnd; index++) {
-                                fprintf(outputDrhos, "%12.9f\n", pRPA->deltaRhos[nuChi0EigIndex*DMnd + index]);
-                            }
-                            fprintf(outputDrhos, "\n");
+    if (!flagNoDmcomm) {
+        // sum over spin comm group
+        if(pSPARC->npspin > 1) {        
+            MPI_Allreduce(MPI_IN_PLACE, deltaRhos, nuChi0EigsAmount*DMnd, MPI_DOUBLE, MPI_SUM, pSPARC->spin_bridge_comm);        
+        }
+        // sum over all k-point groups
+        if (pSPARC->npkpt > 1) {            
+            MPI_Allreduce(MPI_IN_PLACE, deltaRhos, nuChi0EigsAmount*DMnd, MPI_DOUBLE, MPI_SUM, pSPARC->kpt_bridge_comm);
+        }
+        // sum over all band groups 
+        if (pSPARC->npband) {
+            MPI_Allreduce(MPI_IN_PLACE, deltaRhos, nuChi0EigsAmount*DMnd, MPI_DOUBLE, MPI_SUM, pSPARC->blacscomm);
+        }
+        if ((pSPARC->spincomm_index == 0) && (pSPARC->kptcomm_index == 0) && (pSPARC->bandcomm_index == 0) && printFlag) {
+            int dmcommRank;
+            MPI_Comm_rank(pSPARC->dmcomm, &dmcommRank);
+            if (dmcommRank == 0) {
+                FILE *outputDrhos = fopen("deltaRhos.txt", "w");
+                if (outputDrhos ==  NULL) {
+                    printf("error printing delta rho s in test\n");
+                    exit(EXIT_FAILURE);
+                } else {
+                    for (int nuChi0EigIndex = 0; nuChi0EigIndex < nuChi0EigsAmount; nuChi0EigIndex++) {
+                        for (int index = 0; index < DMnd; index++) {
+                            fprintf(outputDrhos, "%12.9f\n", deltaRhos[nuChi0EigIndex*DMnd + index]);
                         }
+                        fprintf(outputDrhos, "\n");
                     }
-                    fclose(outputDrhos);
                 }
+                fclose(outputDrhos);
             }
         }
-        for (int i = 0; i < nuChi0EigsAmount; i++)
-            transfer_deltaRho(pSPARC, pRPA->nuChi0Eigscomm, pRPA->deltaRhos + i*DMnd, pRPA->deltaRhos_phi + i*pSPARC->Nd_d);
-
-    } else {
-        if (!flagNoDmcomm) {
-            // sum over spin comm group
-            if(pSPARC->npspin > 1) {        
-                MPI_Allreduce(MPI_IN_PLACE, pRPA->deltaRhos_kpt, nuChi0EigsAmount*DMnd, MPI_DOUBLE_COMPLEX, MPI_SUM, pSPARC->spin_bridge_comm);        
-            }
-            // sum over all k-point groups
-            if (pSPARC->npkpt > 1) {            
-                MPI_Allreduce(MPI_IN_PLACE, pRPA->deltaRhos_kpt, nuChi0EigsAmount*DMnd, MPI_DOUBLE_COMPLEX, MPI_SUM, pSPARC->kpt_bridge_comm);
-            }
-            // sum over all band groups 
-            if (pSPARC->npband) {
-                MPI_Allreduce(MPI_IN_PLACE, pRPA->deltaRhos_kpt, nuChi0EigsAmount*DMnd, MPI_DOUBLE_COMPLEX, MPI_SUM, pSPARC->blacscomm);
-            }
-            if ((pSPARC->spincomm_index == 0) && (pSPARC->kptcomm_index == 0) && (pSPARC->bandcomm_index == 0) && printFlag) {
-                int dmcommRank;
-                MPI_Comm_rank(pSPARC->dmcomm, &dmcommRank);
-                if (dmcommRank == 0) {
-                    FILE *outputDrhos = fopen("deltaRhos_kpt.txt", "w");
-                    if (outputDrhos ==  NULL) {
-                        printf("error printing delta rho s in test\n");
-                        exit(EXIT_FAILURE);
-                    } else {
-                        for (int nuChi0EigIndex = 0; nuChi0EigIndex < pRPA->nNuChi0Eigscomm; nuChi0EigIndex++) {
-                            for (int index = 0; index < DMnd; index++) {
-                                fprintf(outputDrhos, "%12.9f %12.9f\n", creal(pRPA->deltaRhos_kpt[nuChi0EigIndex*DMnd + index]), cimag(pRPA->deltaRhos_kpt[nuChi0EigIndex*DMnd + index]));
-                            }
-                            fprintf(outputDrhos, "\n");
-                        }
-                    }
-                    fclose(outputDrhos);
-                }
-            }
-        }
-        for (int i = 0; i < nuChi0EigsAmount; i++)
-            transfer_deltaRho_kpt(pSPARC, pRPA->nuChi0Eigscomm, pRPA->deltaRhos_kpt + i*DMnd, pRPA->deltaRhos_kpt_phi + i*pSPARC->Nd_d);
     }
+    for (int i = 0; i < nuChi0EigsAmount; i++)
+        transfer_deltaRho(pSPARC, nuChi0Eigscomm, deltaRhos + i*DMnd, deltaRhos_phi + i*pSPARC->Nd_d);
+}
+
+void collect_transfer_deltaRho_kpt(SPARC_OBJ *pSPARC, double _Complex *deltaRhos_kpt, double _Complex *deltaRhos_kpt_phi, int nuChi0EigsAmount, int printFlag, MPI_Comm nuChi0Eigscomm) {
+    int DMnd = pSPARC->Nd_d_dmcomm;
+    // int ncol = pSPARC->Nband_bandcomm;
+    // int Nkpts_kptcomm = pSPARC->Nkpts_kptcomm;
+    int flagNoDmcomm = (pSPARC->spincomm_index < 0 || pSPARC->kptcomm_index < 0 || pSPARC->bandcomm_index < 0 || pSPARC->dmcomm == MPI_COMM_NULL);
+
+    if (!flagNoDmcomm) {
+        // sum over spin comm group
+        if(pSPARC->npspin > 1) {        
+            MPI_Allreduce(MPI_IN_PLACE, deltaRhos_kpt, nuChi0EigsAmount*DMnd, MPI_DOUBLE_COMPLEX, MPI_SUM, pSPARC->spin_bridge_comm);        
+        }
+        // sum over all k-point groups
+        if (pSPARC->npkpt > 1) {            
+            MPI_Allreduce(MPI_IN_PLACE, deltaRhos_kpt, nuChi0EigsAmount*DMnd, MPI_DOUBLE_COMPLEX, MPI_SUM, pSPARC->kpt_bridge_comm);
+        }
+        // sum over all band groups 
+        if (pSPARC->npband) {
+            MPI_Allreduce(MPI_IN_PLACE, deltaRhos_kpt, nuChi0EigsAmount*DMnd, MPI_DOUBLE_COMPLEX, MPI_SUM, pSPARC->blacscomm);
+        }
+        if ((pSPARC->spincomm_index == 0) && (pSPARC->kptcomm_index == 0) && (pSPARC->bandcomm_index == 0) && printFlag) {
+            int dmcommRank;
+            MPI_Comm_rank(pSPARC->dmcomm, &dmcommRank);
+            if (dmcommRank == 0) {
+                FILE *outputDrhos = fopen("deltaRhos_kpt.txt", "w");
+                if (outputDrhos ==  NULL) {
+                    printf("error printing delta rho s in test\n");
+                    exit(EXIT_FAILURE);
+                } else {
+                    for (int nuChi0EigIndex = 0; nuChi0EigIndex < nuChi0EigsAmount; nuChi0EigIndex++) {
+                        for (int index = 0; index < DMnd; index++) {
+                            fprintf(outputDrhos, "%12.9f %12.9f\n", creal(deltaRhos_kpt[nuChi0EigIndex*DMnd + index]), cimag(deltaRhos_kpt[nuChi0EigIndex*DMnd + index]));
+                        }
+                        fprintf(outputDrhos, "\n");
+                    }
+                }
+                fclose(outputDrhos);
+            }
+        }
+    }
+    for (int i = 0; i < nuChi0EigsAmount; i++)
+        transfer_deltaRho_kpt(pSPARC, nuChi0Eigscomm, deltaRhos_kpt + i*DMnd, deltaRhos_kpt_phi + i*pSPARC->Nd_d);
 }
 
 void transfer_deltaRho(SPARC_OBJ *pSPARC, MPI_Comm nuChi0Eigscomm, double *rho_send, double *rho_recv) {
@@ -146,58 +150,64 @@ void transfer_deltaRho_kpt(SPARC_OBJ *pSPARC, MPI_Comm nuChi0Eigscomm, double _C
 }
 
 
-void Calculate_deltaRhoPotential(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int nuChi0EigsAmount, int printFlag) {
+void Calculate_deltaRhoPotential_gamma(SPARC_OBJ *pSPARC, double *deltaRhos_phi, double *deltaVs_phi, int nuChi0EigsAmount, int printFlag, double *deltaVsForPrint, int nuChi0EigscommIndex, MPI_Comm nuChi0Eigscomm) {
     int rank;
-    MPI_Comm_rank(pRPA->nuChi0Eigscomm, &rank);
-    int nuChi0EigscommIndex = pRPA->nuChi0EigscommIndex;
+    MPI_Comm_rank(nuChi0Eigscomm, &rank);
 
     if (pSPARC->dmcomm_phi == MPI_COMM_NULL) {
         return; 
     } 
-    if (pSPARC->isGammaPoint) {
-        double *rhs = (double *)calloc(sizeof(double), nuChi0EigsAmount * pSPARC->Nd_d);
-        for (int i = 0; i < nuChi0EigsAmount * pSPARC->Nd_d; i++) {
-            rhs[i] = 4.0 * M_PI * pRPA->deltaRhos_phi[i]; // the minus sign is in function poisson_residual
+
+    double *rhs = (double *)calloc(sizeof(double), nuChi0EigsAmount * pSPARC->Nd_d);
+    for (int i = 0; i < nuChi0EigsAmount * pSPARC->Nd_d; i++) {
+        rhs[i] = 4.0 * M_PI * deltaRhos_phi[i]; // the minus sign is in function poisson_residual
+    }
+    poissonSolver_gamma(pSPARC, deltaVs_phi, rhs, nuChi0EigsAmount, nuChi0EigscommIndex);
+    free(rhs);
+    if (printFlag) {
+        // printing delta V, but they are not the delta V for the next filtering
+        for (int i = 0; i < nuChi0EigsAmount; i++) {
+            Transfer_Veff_loc_RPA(pSPARC, nuChi0Eigscomm, deltaVs_phi + i*pSPARC->Nd_d, deltaVsForPrint + i * pSPARC->Nd_d_dmcomm);
         }
-        Calculate_deltaRhoPotential_gamma(pSPARC, pRPA->deltaVs_phi, rhs, nuChi0EigsAmount, nuChi0EigscommIndex);
-        free(rhs);
-        if (printFlag) {
-            // printing delta V, but they are not the delta V for the next filtering
-            for (int i = 0; i < nuChi0EigsAmount; i++) {
-                Transfer_Veff_loc_RPA(pSPARC, pRPA->nuChi0Eigscomm, pRPA->deltaVs_phi + i*pSPARC->Nd_d, pRPA->deltaVs + i * pSPARC->Nd_d_dmcomm);
-            }
-            if ((pSPARC->spincomm_index == 0) && (pSPARC->kptcomm_index == 0) && (pSPARC->bandcomm_index == 0)){
-                int dmcommRank;
-                MPI_Comm_rank(pSPARC->dmcomm, &dmcommRank);
-                if (dmcommRank == 0) {
-                    FILE *outputDVs = fopen("new_deltaVs.txt", "w");
-                    if (outputDVs ==  NULL) {
-                        printf("error printing new delta V s in test\n");
-                        exit(EXIT_FAILURE);
-                    } else {
-                        for (int nuChi0EigIndex = 0; nuChi0EigIndex < pRPA->nNuChi0Eigscomm; nuChi0EigIndex++) {
-                            for (int index = 0; index < pSPARC->Nd_d_dmcomm; index++) {
-                                fprintf(outputDVs, "%12.9f\n", pRPA->deltaVs[nuChi0EigIndex*pSPARC->Nd_d_dmcomm + index]);
-                            }
-                            fprintf(outputDVs, "\n");
+        if ((pSPARC->spincomm_index == 0) && (pSPARC->kptcomm_index == 0) && (pSPARC->bandcomm_index == 0)){
+            int dmcommRank;
+            MPI_Comm_rank(pSPARC->dmcomm, &dmcommRank);
+            if (dmcommRank == 0) {
+                FILE *outputDVs = fopen("new_deltaVs.txt", "w");
+                if (outputDVs ==  NULL) {
+                    printf("error printing new delta V s in test\n");
+                    exit(EXIT_FAILURE);
+                } else {
+                    for (int nuChi0EigIndex = 0; nuChi0EigIndex < nuChi0EigsAmount; nuChi0EigIndex++) {
+                        for (int index = 0; index < pSPARC->Nd_d_dmcomm; index++) {
+                            fprintf(outputDVs, "%12.9f\n", deltaVsForPrint[nuChi0EigIndex*pSPARC->Nd_d_dmcomm + index]);
                         }
+                        fprintf(outputDVs, "\n");
                     }
-                    fclose(outputDVs);
                 }
+                fclose(outputDVs);
             }
         }
-    } else {
-        double _Complex *rhs = (double _Complex*)calloc(sizeof(double _Complex), nuChi0EigsAmount * pSPARC->Nd_d);
-        for (int i = 0; i < nuChi0EigsAmount * pSPARC->Nd_d; i++) {
-            rhs[i] = 4.0 * M_PI * pRPA->deltaRhos_kpt_phi[i];
-        }
-        double qptx = pRPA->q1[qptIndex]; double qpty = pRPA->q2[qptIndex]; double qptz = pRPA->q3[qptIndex];
-        Calculate_deltaRhoPotential_kpt(pSPARC, qptx, qpty, qptz, pRPA->deltaVs_kpt_phi, rhs, nuChi0EigsAmount, nuChi0EigscommIndex);
-        free(rhs);
     }
 }
 
-void Calculate_deltaRhoPotential_gamma(SPARC_OBJ *pSPARC, double *deltaVs_phi, double *rhs, int nuChi0EigsAmounts, int nuChi0EigscommIndex) {
+void Calculate_deltaRhoPotential_kpt(SPARC_OBJ *pSPARC, double _Complex *deltaRhos_kpt_phi, double _Complex *deltaVs_kpt_phi, double qptx, double qpty, double qptz, int nuChi0EigsAmount, int printFlag, int nuChi0EigscommIndex, MPI_Comm nuChi0Eigscomm) {
+    int rank;
+    MPI_Comm_rank(nuChi0Eigscomm, &rank);
+
+    if (pSPARC->dmcomm_phi == MPI_COMM_NULL) {
+        return; 
+    } 
+
+    double _Complex *rhs = (double _Complex*)calloc(sizeof(double _Complex), nuChi0EigsAmount * pSPARC->Nd_d);
+    for (int i = 0; i < nuChi0EigsAmount * pSPARC->Nd_d; i++) {
+        rhs[i] = 4.0 * M_PI * deltaRhos_kpt_phi[i];
+    }
+    poissonSolver_kpt(pSPARC, qptx, qpty, qptz, deltaVs_kpt_phi, rhs, nuChi0EigsAmount, nuChi0EigscommIndex);
+    free(rhs);
+}
+
+void poissonSolver_gamma(SPARC_OBJ *pSPARC, double *deltaVs_phi, double *rhs, int nuChi0EigsAmounts, int nuChi0EigscommIndex) {
     int rank;
     MPI_Comm_rank(pSPARC->dmcomm_phi, &rank);
     int Nd_d = pSPARC->Nd_d;
@@ -256,7 +266,7 @@ void Calculate_deltaRhoPotential_gamma(SPARC_OBJ *pSPARC, double *deltaVs_phi, d
     }
 }
 
-void Calculate_deltaRhoPotential_kpt(SPARC_OBJ *pSPARC, double qptx, double qpty, double qptz, double _Complex *deltaVs_kpt_phi, double _Complex *rhs, int nuChi0EigsAmounts, int nuChi0EigscommIndex) {
+void poissonSolver_kpt(SPARC_OBJ *pSPARC, double qptx, double qpty, double qptz, double _Complex *deltaVs_kpt_phi, double _Complex *rhs, int nuChi0EigsAmounts, int nuChi0EigscommIndex) {
     int rank;
     MPI_Comm_rank(pSPARC->dmcomm_phi, &rank);
     int Nd_d = pSPARC->Nd_d;
