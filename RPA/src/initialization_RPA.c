@@ -128,9 +128,11 @@ void initialize_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int argc, char* argv[]) {
         if (pSPARC->isGammaPoint) {
             pRPA->deltaRhos_phi = (double*)calloc(sizeof(double), pSPARC->Nd_d * pRPA->nNuChi0Eigscomm);
             pRPA->deltaVs_phi = (double*)calloc(sizeof(double), pSPARC->Nd_d * pRPA->nNuChi0Eigscomm);
+            pRPA->Ys_phi = (double*)calloc(sizeof(double), pSPARC->Nd_d * pRPA->nNuChi0Eigscomm);
         } else {
             pRPA->deltaRhos_kpt_phi = (double _Complex*)calloc(sizeof(double _Complex), pSPARC->Nd_d * pRPA->nNuChi0Eigscomm);
             pRPA->deltaVs_kpt_phi = (double _Complex*)calloc(sizeof(double _Complex), pSPARC->Nd_d * pRPA->nNuChi0Eigscomm);
+            pRPA->Ys_kpt_phi = (double _Complex*)calloc(sizeof(double _Complex), pSPARC->Nd_d * pRPA->nNuChi0Eigscomm);
         }
     }
     int flagNoDmcomm = (pSPARC->spincomm_index < 0 || pSPARC->kptcomm_index < 0 || pSPARC->bandcomm_index < 0 || pSPARC->dmcomm == MPI_COMM_NULL);

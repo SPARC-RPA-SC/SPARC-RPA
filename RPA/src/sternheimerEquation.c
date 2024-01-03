@@ -12,7 +12,7 @@
 #include "linearSolvers.h"
 #include "sternheimerEquation.h"
 
-void sternheimer_eq_gamma(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int omegaIndex, int nuChi0EigsAmount, int printFlag) // compute \Delta\rho by solving Sternheimer equations in all pSPARC->dmcomm s
+void sternheimer_eq_gamma(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int omegaIndex, int nuChi0EigsAmount, int printFlag) // compute \Delta\rho by solving Sternheimer equations in all pSPARC->dmcomm s
 {
     #ifdef DEBUG
     int rank;
@@ -187,13 +187,13 @@ void Sternheimer_lhs(SPARC_OBJ *pSPARC, int spn_i, double epsilon, double omega,
         lhsX[i] = 0.0;
     }
     double *lhsXreal_Xcomp = (double*)calloc(sizeof(double), DMnd * nuChi0EigsAmounts);
-    Hamiltonian_vectors_mult( // (Hamiltonian + c * I), use kpt function directly to operate complex variables
+    Hamiltonian_vectors_mult( // (Hamiltonian - \epsilon * I)
         pSPARC, pSPARC->Nd_d_dmcomm, pSPARC->DMVertices_dmcomm, pSPARC->Veff_loc_dmcomm + sg * pSPARC->Nd_d_dmcomm,
         pSPARC->Atom_Influence_nloc, pSPARC->nlocProj, nuChi0EigsAmounts, -epsilon, Xreal, DMnd, lhsXreal_Xcomp, DMnd, spn_i, pSPARC->dmcomm); // reminder: ldi and ldo should not be DMndsp!
     for (int i = 0; i < DMnd * nuChi0EigsAmounts; i++) {// sternheimer eq.s for all \Delta Vs are solved together
         lhsX[i] += lhsXreal_Xcomp[i] - omega*Xreal[i] * I;
     }
-    Hamiltonian_vectors_mult( // (Hamiltonian + c * I), use kpt function directly to operate complex variables
+    Hamiltonian_vectors_mult( // (Hamiltonian - \epsilon * I)
         pSPARC, pSPARC->Nd_d_dmcomm, pSPARC->DMVertices_dmcomm, pSPARC->Veff_loc_dmcomm + sg * pSPARC->Nd_d_dmcomm,
         pSPARC->Atom_Influence_nloc, pSPARC->nlocProj, nuChi0EigsAmounts, -epsilon, Ximag, DMnd, lhsXreal_Xcomp, DMnd, spn_i, pSPARC->dmcomm); // reminder: ldi and ldo should not be DMndsp!
     for (int i = 0; i < DMnd * nuChi0EigsAmounts; i++) {// sternheimer eq.s for all \Delta Vs are solved together

@@ -98,7 +98,7 @@ void test_Hx_nuChi0(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA) {
                 }
             }
             if (!flagNoDmcomm) {
-                sternheimer_eq_gamma(pSPARC, pRPA, qptIndex, omegaIndex, nuChi0EigsAmount, printFlag);
+                sternheimer_eq_gamma(pSPARC, pRPA, omegaIndex, nuChi0EigsAmount, printFlag);
             }
             collect_transfer_deltaRho_gamma(pSPARC, pRPA->deltaRhos, pRPA->deltaRhos_phi, nuChi0EigsAmount, printFlag, pRPA->nuChi0Eigscomm);
             Calculate_deltaRhoPotential_gamma(pSPARC, pRPA->deltaRhos_phi, pRPA->deltaVs_phi, nuChi0EigsAmount, printFlag, pRPA->deltaVs, pRPA->nuChi0EigscommIndex, pRPA->nuChi0Eigscomm);
@@ -224,32 +224,21 @@ double find_min_eigenvalue(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int o
     int printFlag = 0;
     while (loopFlag) {
         if (pSPARC->isGammaPoint) {
-            Transfer_Veff_loc_RPA(pSPARC, pRPA->nuChi0Eigscomm, pRPA->deltaVs_phi, pRPA->deltaVs);
-            if ((fabs(-vec2norm - minEig) < 2e-4) || (iter == maxIter) || (!pSPARC->isGammaPoint)) { // current kpt calculation is not available
+            if ((fabs(-vec2norm - minEig) < 2e-4) || (iter == maxIter)) {
                 loopFlag = 0;
             }
             minEig = -vec2norm;
-            if (!flagNoDmcomm) {
-                sternheimer_eq_gamma(pSPARC, pRPA, qptIndex, omegaIndex, nuChi0EigsAmount, printFlag);
-            }
-            collect_transfer_deltaRho_gamma(pSPARC, pRPA->deltaRhos, pRPA->deltaRhos_phi, nuChi0EigsAmount, printFlag, pRPA->nuChi0Eigscomm);
-            Calculate_deltaRhoPotential_gamma(pSPARC, pRPA->deltaRhos_phi, pRPA->deltaVs_phi, nuChi0EigsAmount, printFlag, pRPA->deltaVs, pRPA->nuChi0EigscommIndex, pRPA->nuChi0Eigscomm);
+            nuChi0_multiply_DeltaV_gamma(pSPARC, pRPA, omegaIndex, pRPA->deltaVs_phi, pRPA->deltaVs_phi, nuChi0EigsAmount, flagNoDmcomm, printFlag);
             if (pSPARC->dmcomm_phi != MPI_COMM_NULL) {
                 Vector2Norm(pRPA->deltaVs_phi, pSPARC->Nd_d, &vec2norm, pSPARC->dmcomm_phi);
                 VectorScale(pRPA->deltaVs_phi, pSPARC->Nd_d, 1.0/vec2norm, pSPARC->dmcomm_phi);
             }
         } else {
-            Transfer_Veff_loc_RPA_kpt(pSPARC, pRPA->nuChi0Eigscomm, pRPA->deltaVs_kpt_phi, pRPA->deltaVs_kpt);
             if ((fabs(-vec2norm - minEig) < 2e-4) || (iter == maxIter) || (!pSPARC->isGammaPoint)) { // current kpt calculation is not available
                 loopFlag = 0;
             }
             minEig = -vec2norm;
-            if (!flagNoDmcomm) {
-                sternheimer_eq_kpt(pSPARC, pRPA, qptIndex, omegaIndex, nuChi0EigsAmount, printFlag);
-            }
-            collect_transfer_deltaRho_kpt(pSPARC, pRPA->deltaRhos_kpt, pRPA->deltaRhos_kpt_phi, nuChi0EigsAmount, printFlag, pRPA->nuChi0Eigscomm);
-            double qptx = pRPA->q1[qptIndex]; double qpty = pRPA->q2[qptIndex]; double qptz = pRPA->q3[qptIndex];
-            Calculate_deltaRhoPotential_kpt(pSPARC, pRPA->deltaRhos_kpt_phi, pRPA->deltaVs_kpt_phi, qptx, qpty, qptz, nuChi0EigsAmount, printFlag, pRPA->nuChi0EigscommIndex, pRPA->nuChi0Eigscomm);
+            nuChi0_multiply_DeltaV_kpt(pSPARC, pRPA, qptIndex, omegaIndex, pRPA->deltaVs_kpt_phi, pRPA->deltaVs_kpt_phi, nuChi0EigsAmount, flagNoDmcomm, printFlag);
             if (pSPARC->dmcomm_phi != MPI_COMM_NULL) {
                 Vector2Norm_complex(pRPA->deltaVs_kpt_phi, pSPARC->Nd_d, &vec2norm, pSPARC->dmcomm_phi);
                 VectorScaleComplex(pRPA->deltaVs_kpt_phi, pSPARC->Nd_d, 1.0/vec2norm, pSPARC->dmcomm_phi);
@@ -269,23 +258,76 @@ void chebyshev_filtering(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int ome
     double e = (maxEig - lambdaCutoff) / 2.0;
     double c = (lambdaCutoff + maxEig) / 2.0;
     double sigma = e / (c - minEig);
+    double sigmaNew;
     double tau = 2.0 / sigma;
     int nuChi0EigsAmount = pRPA->nNuChi0Eigscomm;
+    int totalLength = nuChi0EigsAmount * pSPARC->Nd_d;
 
-    // int printFlag = 0;
-    // if (pSPARC->isGammaPoint) {
-    //     for (int nuChi0EigIndex = 0; nuChi0EigIndex < nuChi0EigsAmount; nuChi0EigIndex++) {
-    //         Transfer_Veff_loc_RPA(pSPARC, pRPA->nuChi0Eigscomm, pRPA->deltaVs_phi + nuChi0EigIndex*pSPARC->Nd_d, pRPA->deltaVs + nuChi0EigIndex*pSPARC->Nd_d_dmcomm); // it tansfer \Delta V at here
-    //     }
-    // } else {
-    //     for (int nuChi0EigIndex = 0; nuChi0EigIndex < pRPA->nNuChi0Eigscomm; nuChi0EigIndex++) {
-    //         Transfer_Veff_loc_RPA_kpt(pSPARC, pRPA->nuChi0Eigscomm, pRPA->deltaVs_kpt_phi + nuChi0EigIndex*pSPARC->Nd_d, pRPA->deltaVs_kpt + nuChi0EigIndex*pSPARC->Nd_d_dmcomm); // it tansfer \Delta V at here
-    //     }
-    // }
-    // if (!flagNoDmcomm) {
-    //     sternheimer_solver(pSPARC, pRPA, qptIndex, omegaIndex, nuChi0EigsAmount, printFlag);
-    // }
-    // collect_transfer_deltaRho(pSPARC, pRPA, nuChi0EigsAmount, printFlag);
-    // Calculate_deltaRhoPotential(pSPARC, pRPA, qptIndex, nuChi0EigsAmount, printFlag);
+    int innerPrintFlag = 0;
+    if (pSPARC->isGammaPoint) {
+        double *Xs = pRPA->deltaVs_phi;
+        double *Ys = pRPA->Ys_phi;
+        double *Yt = (double*)calloc(sizeof(double), totalLength);
 
+        nuChi0_multiply_DeltaV_gamma(pSPARC, pRPA, omegaIndex, Xs, Ys, nuChi0EigsAmount, flagNoDmcomm, 0);
+        for (int index = 0; index < totalLength; index++) {
+            Ys[index] = (Ys[index] - c*Xs[index]) * (sigma/e);
+        }
+
+        for (int time = 0; time < chebyshevDegree; time++) {
+            sigmaNew = 1.0 / (tau - sigma);
+            nuChi0_multiply_DeltaV_gamma(pSPARC, pRPA, omegaIndex, Ys, Yt, nuChi0EigsAmount, flagNoDmcomm, 0);
+            for (int index = 0; index < totalLength; index++) {
+                Yt[index] = (Yt[index] - c*Ys[index])*(2.0*sigmaNew/e) - (sigma/sigmaNew)*Xs[index];
+            }
+            memcpy(Xs, Ys, sizeof(double)*totalLength);
+            memcpy(Ys, Yt, sizeof(double)*totalLength);
+            sigma = sigmaNew;
+        }
+        free(Yt);
+    } else {
+        double _Complex *Xs = pRPA->deltaVs_kpt_phi;
+        double _Complex *Ys = pRPA->Ys_kpt_phi;
+        double _Complex *Yt = (double _Complex*)calloc(sizeof(double _Complex), totalLength);
+
+        nuChi0_multiply_DeltaV_kpt(pSPARC, pRPA, qptIndex, omegaIndex, Xs, Ys, nuChi0EigsAmount, flagNoDmcomm, 0);
+        for (int index = 0; index < totalLength; index++) {
+            Ys[index] = (Ys[index] - c*Xs[index]) * (sigma/e);
+        }
+
+        for (int time = 0; time < chebyshevDegree; time++) {
+            sigmaNew = 1.0 / (tau - sigma);
+            nuChi0_multiply_DeltaV_kpt(pSPARC, pRPA, qptIndex, omegaIndex, Ys, Yt, nuChi0EigsAmount, flagNoDmcomm, 0);
+            for (int index = 0; index < totalLength; index++) {
+                Yt[index] = (Yt[index] - c*Ys[index])*(2.0*sigmaNew/e) - (sigma/sigmaNew)*Xs[index];
+            }
+            memcpy(Xs, Ys, sizeof(double _Complex)*totalLength);
+            memcpy(Ys, Yt, sizeof(double _Complex)*totalLength);
+            sigma = sigmaNew;
+        }
+        free(Yt);
+    }
+}
+
+void nuChi0_multiply_DeltaV_gamma(SPARC_OBJ* pSPARC, RPA_OBJ* pRPA, int omegaIndex, double *DVs_phi, double *nuChi0DVs_phi, int nuChi0EigsAmount, int flagNoDmcomm, int printFlag) {
+    for (int nuChi0EigIndex = 0; nuChi0EigIndex < nuChi0EigsAmount; nuChi0EigIndex++) {
+        Transfer_Veff_loc_RPA(pSPARC, pRPA->nuChi0Eigscomm, DVs_phi + nuChi0EigIndex*pSPARC->Nd_d, pRPA->deltaVs + nuChi0EigIndex*pSPARC->Nd_d_dmcomm); // it tansfer \Delta V at here
+    }
+    if (!flagNoDmcomm) {
+        sternheimer_eq_gamma(pSPARC, pRPA, omegaIndex, nuChi0EigsAmount, 0);
+    }
+    collect_transfer_deltaRho_gamma(pSPARC, pRPA->deltaRhos, pRPA->deltaRhos_phi, nuChi0EigsAmount, 0, pRPA->nuChi0Eigscomm);
+    Calculate_deltaRhoPotential_gamma(pSPARC, pRPA->deltaRhos_phi, nuChi0DVs_phi, nuChi0EigsAmount, printFlag, pRPA->deltaVs, pRPA->nuChi0EigscommIndex, pRPA->nuChi0Eigscomm);
+}
+
+void nuChi0_multiply_DeltaV_kpt(SPARC_OBJ* pSPARC, RPA_OBJ* pRPA, int qptIndex, int omegaIndex, double _Complex *DVs_kpt_phi, double _Complex *nuChi0DVs_kpt_phi, int nuChi0EigsAmount, int flagNoDmcomm, int printFlag) {
+    for (int nuChi0EigIndex = 0; nuChi0EigIndex < pRPA->nNuChi0Eigscomm; nuChi0EigIndex++) {
+        Transfer_Veff_loc_RPA_kpt(pSPARC, pRPA->nuChi0Eigscomm, DVs_kpt_phi + nuChi0EigIndex*pSPARC->Nd_d, pRPA->deltaVs_kpt + nuChi0EigIndex*pSPARC->Nd_d_dmcomm); // it tansfer \Delta V at here
+    }
+    if (!flagNoDmcomm) {
+        sternheimer_eq_kpt(pSPARC, pRPA, qptIndex, omegaIndex, nuChi0EigsAmount, 0);
+    }
+    collect_transfer_deltaRho_kpt(pSPARC, pRPA->deltaRhos_kpt, pRPA->deltaRhos_kpt_phi, nuChi0EigsAmount, 0, pRPA->nuChi0Eigscomm);
+    double qptx = pRPA->q1[qptIndex]; double qpty = pRPA->q2[qptIndex]; double qptz = pRPA->q3[qptIndex];
+    Calculate_deltaRhoPotential_kpt(pSPARC, pRPA->deltaRhos_kpt_phi, nuChi0DVs_kpt_phi, qptx, qpty, qptz, nuChi0EigsAmount, printFlag, pRPA->nuChi0EigscommIndex, pRPA->nuChi0Eigscomm);
 }

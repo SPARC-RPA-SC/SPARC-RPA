@@ -72,6 +72,8 @@ typedef struct _RPA_OBJ {
     // save \Delta V s, \Delta\psi and \Delta\rho s
     double *deltaVs_phi; // in dmcomm_phi, save deltaVs; length is pSPARC->Nd_d * nNuChi0Eigscomm
     double _Complex *deltaVs_kpt_phi; // in dmcomm_phi, save deltaVs; length is pSPARC->Nd_d * nNuChi0Eigscomm
+    double *Ys_phi; // in dmcomm_phi, save medium variable Y for Chebyshev filtering; length is pSPARC->Nd_d * nNuChi0Eigscomm
+    double _Complex *Ys_kpt_phi; // in dmcomm_phi, save medium variable Y for Chebyshev filtering; length is pSPARC->Nd_d * nNuChi0Eigscomm
     double *deltaVs; // Its length is pSPARC->Nd_d_dmcomm*nNuChi0Eigscomm
     double _Complex *deltaVs_kpt; // Its length is pSPARC->Nd_d_dmcomm*nNuChi0Eigscomm
     double *deltaRhos_phi;
