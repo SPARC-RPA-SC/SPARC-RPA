@@ -207,8 +207,9 @@ void cheFSI_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int omegaIndex) 
     int flagCheb = 1;
     int ncheb = 0;
     int chebyshevDegree = 2;
+    int printFlag = (nuChi0EigscommIndex == pRPA->npnuChi0Neig - 1);
     // while (flagCheb) {
-        chebyshev_filtering(pSPARC, pRPA, qptIndex, omegaIndex, minEig, lambdaCutoff, chebyshevDegree, flagNoDmcomm);
+        chebyshev_filtering(pSPARC, pRPA, qptIndex, omegaIndex, minEig, lambdaCutoff, chebyshevDegree, flagNoDmcomm, printFlag);
     // }
 }
 
@@ -221,14 +222,13 @@ double find_min_eigenvalue(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int o
     int maxIter = 30;
     int iter = 0;
     int nuChi0EigsAmount = 1;
-    int printFlag = 0;
     while (loopFlag) {
         if (pSPARC->isGammaPoint) {
             if ((fabs(-vec2norm - minEig) < 2e-4) || (iter == maxIter)) {
                 loopFlag = 0;
             }
             minEig = -vec2norm;
-            nuChi0_multiply_DeltaV_gamma(pSPARC, pRPA, omegaIndex, pRPA->deltaVs_phi, pRPA->deltaVs_phi, nuChi0EigsAmount, flagNoDmcomm, printFlag);
+            nuChi0_multiply_DeltaV_gamma(pSPARC, pRPA, omegaIndex, pRPA->deltaVs_phi, pRPA->deltaVs_phi, nuChi0EigsAmount, flagNoDmcomm);
             if (pSPARC->dmcomm_phi != MPI_COMM_NULL) {
                 Vector2Norm(pRPA->deltaVs_phi, pSPARC->Nd_d, &vec2norm, pSPARC->dmcomm_phi);
                 VectorScale(pRPA->deltaVs_phi, pSPARC->Nd_d, 1.0/vec2norm, pSPARC->dmcomm_phi);
@@ -238,7 +238,7 @@ double find_min_eigenvalue(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int o
                 loopFlag = 0;
             }
             minEig = -vec2norm;
-            nuChi0_multiply_DeltaV_kpt(pSPARC, pRPA, qptIndex, omegaIndex, pRPA->deltaVs_kpt_phi, pRPA->deltaVs_kpt_phi, nuChi0EigsAmount, flagNoDmcomm, printFlag);
+            nuChi0_multiply_DeltaV_kpt(pSPARC, pRPA, qptIndex, omegaIndex, pRPA->deltaVs_kpt_phi, pRPA->deltaVs_kpt_phi, nuChi0EigsAmount, flagNoDmcomm);
             if (pSPARC->dmcomm_phi != MPI_COMM_NULL) {
                 Vector2Norm_complex(pRPA->deltaVs_kpt_phi, pSPARC->Nd_d, &vec2norm, pSPARC->dmcomm_phi);
                 VectorScaleComplex(pRPA->deltaVs_kpt_phi, pSPARC->Nd_d, 1.0/vec2norm, pSPARC->dmcomm_phi);
@@ -253,7 +253,7 @@ double find_min_eigenvalue(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int o
     return minEig;
 }
 
-void chebyshev_filtering(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int omegaIndex, double minEig, double lambdaCutoff, int chebyshevDegree, int flagNoDmcomm) {
+void chebyshev_filtering(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int omegaIndex, double minEig, double lambdaCutoff, int chebyshevDegree, int flagNoDmcomm, int printFlag) {
     double maxEig = -minEig;
     double e = (maxEig - lambdaCutoff) / 2.0;
     double c = (lambdaCutoff + maxEig) / 2.0;
@@ -269,37 +269,88 @@ void chebyshev_filtering(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int ome
         double *Ys = pRPA->Ys_phi;
         double *Yt = (double*)calloc(sizeof(double), totalLength);
 
-        nuChi0_multiply_DeltaV_gamma(pSPARC, pRPA, omegaIndex, Xs, Ys, nuChi0EigsAmount, flagNoDmcomm, 0);
+        if (printFlag) {
+            for (int i = 0; i < nuChi0EigsAmount; i++) {
+                Transfer_Veff_loc_RPA(pSPARC, pRPA->nuChi0Eigscomm, pRPA->deltaVs_phi + i*pSPARC->Nd_d, pRPA->deltaVs + i * pSPARC->Nd_d_dmcomm);
+            }
+            if ((pSPARC->spincomm_index == 0) && (pSPARC->kptcomm_index == 0) && (pSPARC->bandcomm_index == 0)){
+                int dmcommRank;
+                MPI_Comm_rank(pSPARC->dmcomm, &dmcommRank);
+                if (dmcommRank == 0) {
+                    FILE *outputDVs = fopen("deltaVs_beforeFiltering.txt", "w");
+                    if (outputDVs ==  NULL) {
+                        printf("error printing deltaVs_beforeFiltering\n");
+                        exit(EXIT_FAILURE);
+                    } else {
+                        for (int nuChi0EigIndex = 0; nuChi0EigIndex < nuChi0EigsAmount; nuChi0EigIndex++) {
+                            for (int index = 0; index < pSPARC->Nd_d_dmcomm; index++) {
+                                fprintf(outputDVs, "%12.9f\n", pRPA->deltaVs[nuChi0EigIndex*pSPARC->Nd_d_dmcomm + index]);
+                            }
+                            fprintf(outputDVs, "\n");
+                        }
+                    }
+                    fclose(outputDVs);
+                }
+            }
+        }
+
+        nuChi0_multiply_DeltaV_gamma(pSPARC, pRPA, omegaIndex, Xs, Ys, nuChi0EigsAmount, flagNoDmcomm);
         for (int index = 0; index < totalLength; index++) {
             Ys[index] = (Ys[index] - c*Xs[index]) * (sigma/e);
         }
 
         for (int time = 0; time < chebyshevDegree; time++) {
             sigmaNew = 1.0 / (tau - sigma);
-            nuChi0_multiply_DeltaV_gamma(pSPARC, pRPA, omegaIndex, Ys, Yt, nuChi0EigsAmount, flagNoDmcomm, 0);
+            nuChi0_multiply_DeltaV_gamma(pSPARC, pRPA, omegaIndex, Ys, Yt, nuChi0EigsAmount, flagNoDmcomm);
             for (int index = 0; index < totalLength; index++) {
-                Yt[index] = (Yt[index] - c*Ys[index])*(2.0*sigmaNew/e) - (sigma/sigmaNew)*Xs[index];
+                Yt[index] = (Yt[index] - c*Ys[index])*(2.0*sigmaNew/e) - (sigma*sigmaNew)*Xs[index];
             }
             memcpy(Xs, Ys, sizeof(double)*totalLength);
             memcpy(Ys, Yt, sizeof(double)*totalLength);
             sigma = sigmaNew;
         }
+
+        if (printFlag) {
+            for (int i = 0; i < nuChi0EigsAmount; i++) {
+                Transfer_Veff_loc_RPA(pSPARC, pRPA->nuChi0Eigscomm, pRPA->Ys_phi + i*pSPARC->Nd_d, pRPA->deltaVs + i * pSPARC->Nd_d_dmcomm);
+            }
+            if ((pSPARC->spincomm_index == 0) && (pSPARC->kptcomm_index == 0) && (pSPARC->bandcomm_index == 0)){
+                int dmcommRank;
+                MPI_Comm_rank(pSPARC->dmcomm, &dmcommRank);
+                if (dmcommRank == 0) {
+                    FILE *outputDVs = fopen("deltaVs_afterFiltering.txt", "w");
+                    if (outputDVs ==  NULL) {
+                        printf("error printing deltaVs_afterFiltering\n");
+                        exit(EXIT_FAILURE);
+                    } else {
+                        for (int nuChi0EigIndex = 0; nuChi0EigIndex < nuChi0EigsAmount; nuChi0EigIndex++) {
+                            for (int index = 0; index < pSPARC->Nd_d_dmcomm; index++) {
+                                fprintf(outputDVs, "%12.9f\n", pRPA->deltaVs[nuChi0EigIndex*pSPARC->Nd_d_dmcomm + index]);
+                            }
+                            fprintf(outputDVs, "\n");
+                        }
+                    }
+                    fclose(outputDVs);
+                }
+            }
+        }
+        
         free(Yt);
     } else {
         double _Complex *Xs = pRPA->deltaVs_kpt_phi;
         double _Complex *Ys = pRPA->Ys_kpt_phi;
         double _Complex *Yt = (double _Complex*)calloc(sizeof(double _Complex), totalLength);
 
-        nuChi0_multiply_DeltaV_kpt(pSPARC, pRPA, qptIndex, omegaIndex, Xs, Ys, nuChi0EigsAmount, flagNoDmcomm, 0);
+        nuChi0_multiply_DeltaV_kpt(pSPARC, pRPA, qptIndex, omegaIndex, Xs, Ys, nuChi0EigsAmount, flagNoDmcomm);
         for (int index = 0; index < totalLength; index++) {
             Ys[index] = (Ys[index] - c*Xs[index]) * (sigma/e);
         }
 
         for (int time = 0; time < chebyshevDegree; time++) {
             sigmaNew = 1.0 / (tau - sigma);
-            nuChi0_multiply_DeltaV_kpt(pSPARC, pRPA, qptIndex, omegaIndex, Ys, Yt, nuChi0EigsAmount, flagNoDmcomm, 0);
+            nuChi0_multiply_DeltaV_kpt(pSPARC, pRPA, qptIndex, omegaIndex, Ys, Yt, nuChi0EigsAmount, flagNoDmcomm);
             for (int index = 0; index < totalLength; index++) {
-                Yt[index] = (Yt[index] - c*Ys[index])*(2.0*sigmaNew/e) - (sigma/sigmaNew)*Xs[index];
+                Yt[index] = (Yt[index] - c*Ys[index])*(2.0*sigmaNew/e) - (sigma*sigmaNew)*Xs[index];
             }
             memcpy(Xs, Ys, sizeof(double _Complex)*totalLength);
             memcpy(Ys, Yt, sizeof(double _Complex)*totalLength);
@@ -309,7 +360,7 @@ void chebyshev_filtering(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int ome
     }
 }
 
-void nuChi0_multiply_DeltaV_gamma(SPARC_OBJ* pSPARC, RPA_OBJ* pRPA, int omegaIndex, double *DVs_phi, double *nuChi0DVs_phi, int nuChi0EigsAmount, int flagNoDmcomm, int printFlag) {
+void nuChi0_multiply_DeltaV_gamma(SPARC_OBJ* pSPARC, RPA_OBJ* pRPA, int omegaIndex, double *DVs_phi, double *nuChi0DVs_phi, int nuChi0EigsAmount, int flagNoDmcomm) {
     for (int nuChi0EigIndex = 0; nuChi0EigIndex < nuChi0EigsAmount; nuChi0EigIndex++) {
         Transfer_Veff_loc_RPA(pSPARC, pRPA->nuChi0Eigscomm, DVs_phi + nuChi0EigIndex*pSPARC->Nd_d, pRPA->deltaVs + nuChi0EigIndex*pSPARC->Nd_d_dmcomm); // it tansfer \Delta V at here
     }
@@ -317,10 +368,10 @@ void nuChi0_multiply_DeltaV_gamma(SPARC_OBJ* pSPARC, RPA_OBJ* pRPA, int omegaInd
         sternheimer_eq_gamma(pSPARC, pRPA, omegaIndex, nuChi0EigsAmount, 0);
     }
     collect_transfer_deltaRho_gamma(pSPARC, pRPA->deltaRhos, pRPA->deltaRhos_phi, nuChi0EigsAmount, 0, pRPA->nuChi0Eigscomm);
-    Calculate_deltaRhoPotential_gamma(pSPARC, pRPA->deltaRhos_phi, nuChi0DVs_phi, nuChi0EigsAmount, printFlag, pRPA->deltaVs, pRPA->nuChi0EigscommIndex, pRPA->nuChi0Eigscomm);
+    Calculate_deltaRhoPotential_gamma(pSPARC, pRPA->deltaRhos_phi, nuChi0DVs_phi, nuChi0EigsAmount, 0, pRPA->deltaVs, pRPA->nuChi0EigscommIndex, pRPA->nuChi0Eigscomm);
 }
 
-void nuChi0_multiply_DeltaV_kpt(SPARC_OBJ* pSPARC, RPA_OBJ* pRPA, int qptIndex, int omegaIndex, double _Complex *DVs_kpt_phi, double _Complex *nuChi0DVs_kpt_phi, int nuChi0EigsAmount, int flagNoDmcomm, int printFlag) {
+void nuChi0_multiply_DeltaV_kpt(SPARC_OBJ* pSPARC, RPA_OBJ* pRPA, int qptIndex, int omegaIndex, double _Complex *DVs_kpt_phi, double _Complex *nuChi0DVs_kpt_phi, int nuChi0EigsAmount, int flagNoDmcomm) {
     for (int nuChi0EigIndex = 0; nuChi0EigIndex < pRPA->nNuChi0Eigscomm; nuChi0EigIndex++) {
         Transfer_Veff_loc_RPA_kpt(pSPARC, pRPA->nuChi0Eigscomm, DVs_kpt_phi + nuChi0EigIndex*pSPARC->Nd_d, pRPA->deltaVs_kpt + nuChi0EigIndex*pSPARC->Nd_d_dmcomm); // it tansfer \Delta V at here
     }
@@ -329,5 +380,5 @@ void nuChi0_multiply_DeltaV_kpt(SPARC_OBJ* pSPARC, RPA_OBJ* pRPA, int qptIndex, 
     }
     collect_transfer_deltaRho_kpt(pSPARC, pRPA->deltaRhos_kpt, pRPA->deltaRhos_kpt_phi, nuChi0EigsAmount, 0, pRPA->nuChi0Eigscomm);
     double qptx = pRPA->q1[qptIndex]; double qpty = pRPA->q2[qptIndex]; double qptz = pRPA->q3[qptIndex];
-    Calculate_deltaRhoPotential_kpt(pSPARC, pRPA->deltaRhos_kpt_phi, nuChi0DVs_kpt_phi, qptx, qpty, qptz, nuChi0EigsAmount, printFlag, pRPA->nuChi0EigscommIndex, pRPA->nuChi0Eigscomm);
+    Calculate_deltaRhoPotential_kpt(pSPARC, pRPA->deltaRhos_kpt_phi, nuChi0DVs_kpt_phi, qptx, qpty, qptz, nuChi0EigsAmount, 0, pRPA->nuChi0EigscommIndex, pRPA->nuChi0Eigscomm);
 }

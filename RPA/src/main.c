@@ -77,7 +77,7 @@ int main(int argc, char *argv[]) {
 
     initialize_deltaVs(&SPARC, &RPA);
 
-    int testFlag = 1;
+    int testFlag = 0;
     if (testFlag) {
         test_Hx_nuChi0(&SPARC, &RPA);
     }
