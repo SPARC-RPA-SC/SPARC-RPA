@@ -36,17 +36,18 @@ int block_COCG(void (*lhsfun)(SPARC_OBJ*, int, double, double, double *, double 
     }
     double _Complex *W = (double _Complex*)calloc(sizeof(double _Complex), DMnd*nuChi0EigsAmounts);
     memcpy(W, V, sizeof(double _Complex) * rhsLength);
-    double _Complex *VT = (double _Complex*)calloc(sizeof(double _Complex), nuChi0EigsAmounts*DMnd);
-    matrix_transpose(V, DMnd, nuChi0EigsAmounts, VT);
     double _Complex *rho = (double _Complex*)calloc(sizeof(double _Complex), nuChi0EigsAmounts*nuChi0EigsAmounts);
     double _Complex *lapackRho = (double _Complex*)calloc(sizeof(double _Complex), nuChi0EigsAmounts*nuChi0EigsAmounts);
     // Reminder: if there is domain parallelization, then it is necessary to call pdgemm_ function in ScaLapack with blacs
     // to make the distributed matrix multiplication
-    matrix_multiplication(VT, nuChi0EigsAmounts, DMnd, W, nuChi0EigsAmounts, rho);
+    double Nalpha = 1.0; double Nbeta = 0.0;
+    cblas_zgemm(CblasColMajor, CblasTrans, CblasNoTrans, nuChi0EigsAmounts, nuChi0EigsAmounts, DMnd,
+                  &Nalpha, V, DMnd,
+                  W, DMnd, &Nbeta,
+                  rho, nuChi0EigsAmounts);
     double _Complex *P = (double _Complex*)calloc(sizeof(double _Complex), DMnd*nuChi0EigsAmounts);
     double _Complex *beta = (double _Complex*)calloc(sizeof(double _Complex), nuChi0EigsAmounts*nuChi0EigsAmounts);
     double _Complex *U = (double _Complex*)calloc(sizeof(double _Complex), DMnd*nuChi0EigsAmounts);
-    double _Complex *UT = (double _Complex*)calloc(sizeof(double _Complex), nuChi0EigsAmounts*DMnd);
     double _Complex *mu = (double _Complex*)calloc(sizeof(double _Complex), nuChi0EigsAmounts*nuChi0EigsAmounts);
     double _Complex *lapackMu = (double _Complex*)calloc(sizeof(double _Complex), nuChi0EigsAmounts*nuChi0EigsAmounts);
     double _Complex *alpha = (double _Complex*)calloc(sizeof(double _Complex), nuChi0EigsAmounts*nuChi0EigsAmounts);
@@ -60,24 +61,35 @@ int block_COCG(void (*lhsfun)(SPARC_OBJ*, int, double, double, double *, double 
         if (judge_converge(ix, nuChi0EigsAmounts, RHS2norm, tol, resNormRecords)) {
             break;
         }
-        matrix_multiplication(P, DMnd, nuChi0EigsAmounts, beta, nuChi0EigsAmounts, midVariable);
+        cblas_zgemm(CblasColMajor, CblasNoTrans, CblasNoTrans, DMnd, nuChi0EigsAmounts, nuChi0EigsAmounts,
+                  &Nalpha, P, DMnd,
+                  beta, nuChi0EigsAmounts, &Nbeta,
+                  midVariable, DMnd);
         for (int i = 0; i < rhsLength; i++) {
             P[i] = W[i] + midVariable[i]; // P = W + P*beta;
         }
         divide_complex_vectors(P, dividedReal, dividedImag, rhsLength);
         lhsfun(pSPARC, spn_i, epsilon, omega, dividedReal, dividedImag, U, nuChi0EigsAmounts); // U = Afun(P);
-        matrix_transpose(U, DMnd, nuChi0EigsAmounts, UT);
-        matrix_multiplication(UT, nuChi0EigsAmounts, DMnd, P, nuChi0EigsAmounts, mu); // mu = U.' * P;
+        cblas_zgemm(CblasColMajor, CblasTrans, CblasNoTrans, nuChi0EigsAmounts, nuChi0EigsAmounts, DMnd,
+                  &Nalpha, U, DMnd,
+                  P, DMnd, &Nbeta,
+                  mu, nuChi0EigsAmounts); // mu = U.' * P;
         MKL_INT ipiv[nuChi0EigsAmounts];
         memcpy(alpha, rho, sizeof(double _Complex)*nuChi0EigsAmounts*nuChi0EigsAmounts);
         memcpy(lapackMu, mu, sizeof(double _Complex)*nuChi0EigsAmounts*nuChi0EigsAmounts);
         info = LAPACKE_zsysv( LAPACK_COL_MAJOR, 'L', nuChi0EigsAmounts, nuChi0EigsAmounts, lapackMu, nuChi0EigsAmounts, ipiv, alpha, nuChi0EigsAmounts ); // alpha = mu \ rho;
-        matrix_multiplication(P, DMnd, nuChi0EigsAmounts, alpha, nuChi0EigsAmounts, midVariable);
+        cblas_zgemm(CblasColMajor, CblasNoTrans, CblasNoTrans, DMnd, nuChi0EigsAmounts, nuChi0EigsAmounts,
+                  &Nalpha, P, DMnd,
+                  alpha, nuChi0EigsAmounts, &Nbeta,
+                  midVariable, DMnd);
         for (int i = 0; i < rhsLength; i++) {
             deltaPsisReal[i] += creal(midVariable[i]);
             deltaPsisImag[i] += cimag(midVariable[i]); // X = X + P*alpha;
         }
-        matrix_multiplication(U, DMnd, nuChi0EigsAmounts, alpha, nuChi0EigsAmounts, midVariable);
+        cblas_zgemm(CblasColMajor, CblasNoTrans, CblasNoTrans, DMnd, nuChi0EigsAmounts, nuChi0EigsAmounts,
+                  &Nalpha, U, DMnd,
+                  alpha, nuChi0EigsAmounts, &Nbeta,
+                  midVariable, DMnd);
         for (int i = 0; i < rhsLength; i++) {
             V[i] -= midVariable[i]; // V = V - U*alpha;
         }
@@ -85,8 +97,10 @@ int block_COCG(void (*lhsfun)(SPARC_OBJ*, int, double, double, double *, double 
         for (int vecIndex = 0; vecIndex < nuChi0EigsAmounts; vecIndex++) {
             Vector2Norm_complex(V + vecIndex*DMnd, DMnd, &(resNormRecords[(ix + 1)*nuChi0EigsAmounts + vecIndex]), pSPARC->dmcomm);
         }
-        matrix_transpose(V, DMnd, nuChi0EigsAmounts, VT);
-        matrix_multiplication(VT, nuChi0EigsAmounts, DMnd, W, nuChi0EigsAmounts, rhoNew); // rho_new = V.' * W;
+        cblas_zgemm(CblasColMajor, CblasTrans, CblasNoTrans, nuChi0EigsAmounts, nuChi0EigsAmounts, DMnd,
+                  &Nalpha, V, DMnd,
+                  W, DMnd, &Nbeta,
+                  rhoNew, nuChi0EigsAmounts); // rho_new = V.' * W;
         memcpy(beta, rhoNew, sizeof(double _Complex)*nuChi0EigsAmounts*nuChi0EigsAmounts);
         memcpy(lapackRho, rho, sizeof(double _Complex)*nuChi0EigsAmounts*nuChi0EigsAmounts);
         info = LAPACKE_zsysv( LAPACK_COL_MAJOR, 'L', nuChi0EigsAmounts, nuChi0EigsAmounts, lapackRho, nuChi0EigsAmounts, ipiv, beta, nuChi0EigsAmounts ); // beta = rho \ rho_new;
@@ -101,13 +115,11 @@ int block_COCG(void (*lhsfun)(SPARC_OBJ*, int, double, double, double *, double 
     free(LHSx);
     free(V);
     free(W);
-    free(VT);
     free(rho);
     free(lapackRho);
     free(P);
     free(beta);
     free(U);
-    free(UT);
     free(mu);
     free(lapackMu);
     free(alpha);
