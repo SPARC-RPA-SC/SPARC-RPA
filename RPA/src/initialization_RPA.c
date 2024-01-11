@@ -119,6 +119,9 @@ void initialize_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int argc, char* argv[]) {
     pRPA->npNdx_phi = pSPARC->npNdx_phi;
     pRPA->npNdy_phi = pSPARC->npNdy_phi;
     pRPA->npNdz_phi = pSPARC->npNdz_phi;
+    int npNd = pSPARC->npNdx_phi * pSPARC->npNdy_phi * pSPARC->npNdz_phi;
+    setup_blacsComm_RPA(pRPA, pSPARC->dmcomm_phi, pSPARC->Nd_d, pSPARC->Nspinor_spincomm, pSPARC->Nspinor_eig, 
+        pSPARC->Nd, npNd, pSPARC->eig_serial_maxns, pSPARC->eig_paral_blksz, pSPARC->isGammaPoint); // all processors should get into this function!
     MPI_Barrier(MPI_COMM_WORLD); // code above are okay
     if (!rank) {
         write_output_init(pSPARC);

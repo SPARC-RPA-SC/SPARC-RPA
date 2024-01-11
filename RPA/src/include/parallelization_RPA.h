@@ -11,4 +11,6 @@ int judge_npObject(int nObjectInTotal, int sizeFatherComm, int npInput);
 
 int distribute_comm_load(int nObjectInTotal, int npObject, int rankFatherComm, int sizeFatherComm, int *commIndex, int *objectStartIndex, int *objectEndIndex);
 
+void setup_blacsComm_RPA(RPA_OBJ *pRPA, MPI_Comm SPARC_dmcomm_phi, int DMnd, int Nspinor_spincomm, int Nspinor_eig, 
+    int Nd, int npNd, int MAX_NS, int eig_paral_blksz, int isGammaPoint);
 #endif

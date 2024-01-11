@@ -13,11 +13,19 @@
 #include <string.h>
 #include <mpi.h>
 #include <limits.h>
+#define MKL_Complex16 double _Complex
+#include "mkl.h"
+#include "mkl_lapacke.h"
+#include "blacs.h"     // Cblacs_*
+#include <mkl_blacs.h>
+#include <mkl_pblas.h>
+#include <mkl_scalapack.h>
 
 #include "main.h"
 #include "parallelization_RPA.h"
 #include "parallelization.h"
 
+#define max(a,b) ((a)>(b)?(a):(b))
 #define min(a,b) ((a)<(b)?(a):(b))
 
 void Setup_Comms_RPA(RPA_OBJ *pRPA, int Nspin, int Nkpts, int Nstates) {
@@ -60,7 +68,7 @@ void Setup_Comms_RPA(RPA_OBJ *pRPA, int Nspin, int Nkpts, int Nstates) {
 }
 
 void dims_divide_Eigs(int nuChi0Neig, int Nspin, int Nkpts, int Nstates, int *npnuChi0Neig, int *npspin, int *npkpt, int *npband) {
-    // this function is for computing the optimal dividance on qpts, omegas and nuChi0Eigs.
+    // this function is for computing the optimal dividance on nuChi0Eigs, (spins, kpts and bands for pSPARC).
 }
 
 int judge_npObject(int nObjectInTotal, int sizeFatherComm, int npInput) {
@@ -97,4 +105,214 @@ int distribute_comm_load(int nObjectInTotal, int npObject, int rankFatherComm, i
     *objectEndIndex = *objectStartIndex + nObjectInComm - 1;
 
     return nObjectInComm;
+}
+
+void setup_blacsComm_RPA(RPA_OBJ *pRPA, MPI_Comm SPARC_dmcomm_phi, int DMnd, int Nspinor_spincomm, int Nspinor_eig, 
+    int Nd, int npNd, int MAX_NS, int eig_paral_blksz, int isGammaPoint) {
+    int nprocWorld, rankWorld;
+    MPI_Comm_size(MPI_COMM_WORLD, &nprocWorld);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rankWorld);
+    int nprocNuChi0EigsComm = -1;
+    int color;
+    int dims[3] = {0, 0, 0};
+    if (pRPA->nuChi0EigscommIndex < 0) {
+        color = INT_MAX;
+    }
+    else if (SPARC_dmcomm_phi == MPI_COMM_NULL) {
+        color = INT_MAX;
+    } else {
+        MPI_Comm_size(pRPA->nuChi0Eigscomm, &nprocNuChi0EigsComm);
+        int rank_dmcomm_phi;
+        MPI_Comm_rank(SPARC_dmcomm_phi, &rank_dmcomm_phi);
+        color = rank_dmcomm_phi;
+    }
+    MPI_Comm_split(MPI_COMM_WORLD, color, pRPA->nuChi0EigscommIndex, &pRPA->nuChi0BlacsComm);
+
+    // #if defined(USE_MKL) || defined(USE_SCALAPACK)
+    int size_blacscomm, DMndsp, DMndspe;
+    int *usermap, *usermap_0, *usermap_1;
+    int info, bandsizes[2], nprow, npcol, myrow, mycol;
+
+    size_blacscomm = pRPA->npnuChi0Neig;
+    DMndsp = DMnd * Nspinor_spincomm;
+    DMndspe = DMnd * Nspinor_eig;
+
+    if ((pRPA->nuChi0EigscommIndex >= 0) && (SPARC_dmcomm_phi != MPI_COMM_NULL)) {
+        usermap = (int *)malloc(sizeof(int)*size_blacscomm);
+        usermap_0 = (int *)malloc(sizeof(int)*size_blacscomm);
+        usermap_1 = (int *)malloc(sizeof(int)*size_blacscomm);
+        for (int i = 0; i < size_blacscomm; i++) {
+            usermap[i] = usermap_0[i] = usermap_1[i] = rankWorld - pRPA->rank0nuChi0EigscommInWorld + i*nprocNuChi0EigsComm;
+        }
+
+        // in order to use a subgroup of blacscomm, use the following
+        // to get a good number of subgroup processes
+        bandsizes[0] = ((Nd-1)/npNd+1) * Nspinor_eig;
+        bandsizes[1] = pRPA->nuChi0Neig;
+        ScaLAPACK_Dims_2D_BLCYC(size_blacscomm, bandsizes, dims);
+#ifdef DEBUG
+        printf("global rank = %d, size_blacscomm = %d, nuChi0 ScaLAPACK topology %d, Dims = (%d, %d)\n", rankWorld, size_blacscomm, color, dims[0], dims[1]);
+#endif
+        // TODO: make it able to use a subgroup of the blacscomm! For now just enforce it.
+        if (dims[0] * dims[1] != size_blacscomm) {
+            dims[0] = size_blacscomm;
+            dims[1] = 1;
+        }
+    } else {
+        usermap = (int *)malloc(sizeof(int)*1);
+        usermap_0 = (int *)malloc(sizeof(int)*1);
+        usermap_1 = (int *)malloc(sizeof(int)*1);
+        usermap[0] = usermap_0[0] = usermap_1[0] = rankWorld;
+        dims[0] = dims[1] = 1;
+    }
+
+    int myrank_mpi, nprocs_mpi;
+    Cblacs_pinfo( &myrank_mpi, &nprocs_mpi );
+
+    // the following commands will create a context with handle ictxt_blacs
+    Cblacs_get( -1, 0, &pRPA->ictxt_blacs );
+    if ((pRPA->nuChi0EigscommIndex >= 0) && (SPARC_dmcomm_phi != MPI_COMM_NULL)) {
+        Cblacs_gridmap( &pRPA->ictxt_blacs, usermap_0, 1, 1, pRPA->npnuChi0Neig); // row topology
+    } else {
+        Cblacs_gridmap( &pRPA->ictxt_blacs, usermap_0, 1, 1, dims[0] * dims[1]); // row topology
+    }
+    free(usermap_0);
+
+    // create ictxt_blacs topology
+    Cblacs_get( -1, 0, &pRPA->ictxt_blacs_topo );
+    if ((pRPA->nuChi0EigscommIndex >= 0) && (SPARC_dmcomm_phi != MPI_COMM_NULL)) {
+        // create usermap_1 = reshape(usermap,[dims[0], dims[1]])
+        for (int j = 0; j < dims[1]; j++) {
+            for (int i = 0; i < dims[0]; i++) {
+                usermap_1[j*dims[0]+i] = usermap[i*dims[1]+j];
+            }
+        }
+    }
+    Cblacs_gridmap( &pRPA->ictxt_blacs_topo, usermap_1, dims[0], dims[0], dims[1] ); // Cart topology
+    free(usermap_1);
+    free(usermap);
+
+    // get coord of each process in original context
+    Cblacs_gridinfo( pRPA->ictxt_blacs, &nprow, &npcol, &myrow, &mycol );
+
+    int ZERO = 0, mb, nb, llda;
+    mb = max(1, DMndspe);
+    nb = (pRPA->nuChi0Neig - 1) / pRPA->npnuChi0Neig + 1; // equal to ceil(Nstates/npband), for int only
+    // set up descriptor for storage of orbitals in ictxt_blacs (original)
+    llda = max(1, DMndsp);
+    if ((pRPA->nuChi0EigscommIndex >= 0) && (SPARC_dmcomm_phi != MPI_COMM_NULL)) {
+        descinit_(&pRPA->desc_orbitals[0], &DMndspe, &pRPA->nuChi0Neig,
+                  &mb, &nb, &ZERO, &ZERO, &pRPA->ictxt_blacs, &llda, &info);
+    } else {
+        for (int i = 0; i < 9; i++)
+            pRPA->desc_orbitals[i] = 0;
+    }
+#ifdef DEBUG
+    int temp_r, temp_c;
+    temp_r = numroc_( &DMndspe, &mb, &myrow, &ZERO, &nprow);
+    temp_c = numroc_( &pRPA->nuChi0Neig, &nb, &mycol, &ZERO, &npcol);
+    if ((pRPA->nuChi0EigscommIndex >= 0) && (SPARC_dmcomm_phi != MPI_COMM_NULL)) printf("global rank = %2d, 1D topo, my nuChi0 blacs rank = %d, BLCYC size (%d, %d), actual size (%d, %d), DMndspe %d, mb %d, myrow %d, nprow %d, nuChi0Neig %d, nb %d, mycol %d, npcol %d\n", 
+        rankWorld, pRPA->nuChi0EigscommIndex, temp_r, temp_c, DMndsp, pRPA->nNuChi0Eigscomm,
+        DMndspe, mb, myrow, nprow, pRPA->nuChi0Neig, nb, mycol, npcol);
+#endif
+    // get coord of each process in block cyclic topology context
+    Cblacs_gridinfo( pRPA->ictxt_blacs_topo, &nprow, &npcol, &myrow, &mycol );
+    pRPA->nprow_ictxt_blacs_topo = nprow;
+    pRPA->npcol_ictxt_blacs_topo = npcol;
+
+    // set up descriptor for block-cyclic format storage of orbitals in ictxt_blacs
+    // TODO: make block-cyclic parameters mb and nb input variables!
+    mb = max(1, DMndspe / dims[0]); // this is only block, no cyclic! Tune this to improve efficiency!
+    nb = max(1, pRPA->nuChi0Neig / dims[1]); // this is only block, no cyclic!
+
+    // find number of rows/cols of the local distributed orbitals
+    if ((pRPA->nuChi0EigscommIndex >= 0) && (SPARC_dmcomm_phi != MPI_COMM_NULL)) {
+        pRPA->nr_orb_BLCYC = numroc_( &DMndspe, &mb, &myrow, &ZERO, &nprow);
+        pRPA->nc_orb_BLCYC = numroc_( &pRPA->nuChi0Neig, &nb, &mycol, &ZERO, &npcol);
+    } else {
+        pRPA->nr_orb_BLCYC = 1;
+        pRPA->nc_orb_BLCYC = 1;
+    }
+    llda = max(1, pRPA->nr_orb_BLCYC);
+    if ((pRPA->nuChi0EigscommIndex >= 0) && (SPARC_dmcomm_phi != MPI_COMM_NULL)) {
+        descinit_(&pRPA->desc_orb_BLCYC[0], &DMndspe, &pRPA->nuChi0Neig,
+                  &mb, &nb, &ZERO, &ZERO, &pRPA->ictxt_blacs_topo, &llda, &info);
+    } else {
+        for (int i = 0; i < 9; i++)
+            pRPA->desc_orb_BLCYC[i] = 0;
+    }
+#ifdef DEBUG
+    if ((pRPA->nuChi0EigscommIndex >= 0) && (SPARC_dmcomm_phi != MPI_COMM_NULL)) printf("global rank = %2d, 2D topo, my nuChi0 blacs rank = %d, BLCYC size (%d, %d), actual size (%d, %d), DMndspe %d, mb %d, myrow %d, nprow %d, nuChi0Neig %d, nb %d, mycol %d, npcol %d\n", 
+        rankWorld, pRPA->nuChi0EigscommIndex, pRPA->nr_orb_BLCYC, pRPA->nc_orb_BLCYC, DMndsp, pRPA->nNuChi0Eigscomm,
+        DMndspe, mb, myrow, nprow, pRPA->nuChi0Neig, nb, mycol, npcol);
+#endif
+    // set up distribution of projected Hamiltonian and the corresponding overlap matrix
+    // TODO: Find optimal distribution of the projected Hamiltonian and mass matrix!
+    //       For now Hp and Mp are distributed as follows: we distribute them in the same
+    //       context topology as the bands.
+    //       Note that mb = nb!
+
+    // the maximum Nstates up to which we will use LAPACK to solve
+    // the subspace eigenproblem in serial
+    // int MAX_NS = 2000;
+    pRPA->useLAPACK = (pRPA->nuChi0Neig <= MAX_NS) ? 1 : 0;
+
+    int mbQ, nbQ, lldaQ;
+       // block size for storing Hp and Mp
+    if (pRPA->useLAPACK == 1) {
+        // in this case we will call LAPACK instead to solve the subspace eigenproblem
+        mb = nb = pRPA->nuChi0Neig;
+        mbQ = nbQ = 64; // block size for storing subspace eigenvectors
+    } else {
+        // in this case we will use ScaLAPACK to solve the subspace eigenproblem
+        mb = nb = eig_paral_blksz;
+        mbQ = nbQ = eig_paral_blksz; // block size for storing subspace eigenvectors
+    }
+
+    if ((pRPA->nuChi0EigscommIndex >= 0) && (SPARC_dmcomm_phi != MPI_COMM_NULL)) {
+        pRPA->nr_Hp_BLCYC = pRPA->nr_Mp_BLCYC = numroc_( &pRPA->nuChi0Neig, &mb, &myrow, &ZERO, &nprow);
+        pRPA->nr_Hp_BLCYC = pRPA->nr_Mp_BLCYC = max(1, pRPA->nr_Mp_BLCYC);
+        pRPA->nc_Hp_BLCYC = pRPA->nc_Mp_BLCYC = numroc_( &pRPA->nuChi0Neig, &nb, &mycol, &ZERO, &npcol);
+        pRPA->nc_Hp_BLCYC = pRPA->nc_Mp_BLCYC = max(1, pRPA->nc_Mp_BLCYC);
+        pRPA->nr_Q_BLCYC = numroc_( &pRPA->nuChi0Neig, &mbQ, &myrow, &ZERO, &nprow);
+        pRPA->nc_Q_BLCYC = numroc_( &pRPA->nuChi0Neig, &nbQ, &mycol, &ZERO, &npcol);
+    } else {
+        pRPA->nr_Hp_BLCYC = pRPA->nc_Hp_BLCYC = 1;
+        pRPA->nr_Mp_BLCYC = pRPA->nc_Mp_BLCYC = 1;
+        pRPA->nr_Q_BLCYC  = pRPA->nc_Q_BLCYC  = 1;
+    }
+
+    llda = max(1, pRPA->nr_Hp_BLCYC);
+    lldaQ= max(1, pRPA->nr_Q_BLCYC);
+    if ((pRPA->nuChi0EigscommIndex >= 0) && (SPARC_dmcomm_phi != MPI_COMM_NULL)) {
+        descinit_(&pRPA->desc_Hp_BLCYC[0], &pRPA->nuChi0Neig, &pRPA->nuChi0Neig,
+                  &mb, &nb, &ZERO, &ZERO, &pRPA->ictxt_blacs_topo, &llda, &info);
+        for (int i = 0; i < 9; i++) {
+            pRPA->desc_Mp_BLCYC[i] = pRPA->desc_Hp_BLCYC[i];
+        }
+        descinit_(&pRPA->desc_Q_BLCYC[0], &pRPA->nuChi0Neig, &pRPA->nuChi0Neig,
+                  &mbQ, &nbQ, &ZERO, &ZERO, &pRPA->ictxt_blacs_topo, &lldaQ, &info);
+    } else {
+        for (int i = 0; i < 9; i++) {
+            pRPA->desc_Q_BLCYC[i] = pRPA->desc_Mp_BLCYC[i] = pRPA->desc_Hp_BLCYC[i] = 0;
+        }
+    }
+
+#ifdef DEBUG
+    if ((pRPA->nuChi0EigscommIndex >= 0) && (SPARC_dmcomm_phi != MPI_COMM_NULL)) printf("global rank = %d, Hp topo, mb = %d, mbQ = %d, myrow %d, nprow %d, mycol %d, npcol %d, nr_Hp = %d, nc_Hp = %d\n", rankWorld, mb, mbQ, myrow, nprow, mycol, npcol, pRPA->nr_Hp_BLCYC, pRPA->nc_Hp_BLCYC);
+#endif
+
+    // allocate memory for block cyclic distribution of projected Hamiltonian and mass matrix
+    if (isGammaPoint){
+        pRPA->Hp = (double *)malloc(pRPA->nr_Hp_BLCYC * pRPA->nc_Hp_BLCYC * sizeof(double));
+        pRPA->Mp = (double *)malloc(pRPA->nr_Mp_BLCYC * pRPA->nc_Mp_BLCYC * sizeof(double));
+        pRPA->Q  = (double *)malloc(pRPA->nr_Q_BLCYC * pRPA->nc_Q_BLCYC * sizeof(double));
+    } else{
+        pRPA->Hp_kpt = (double _Complex *) malloc(pRPA->nr_Hp_BLCYC * pRPA->nc_Hp_BLCYC * sizeof(double _Complex));
+        pRPA->Mp_kpt = (double _Complex *) malloc(pRPA->nr_Mp_BLCYC * pRPA->nc_Mp_BLCYC * sizeof(double _Complex));
+        pRPA->Q_kpt  = (double _Complex *) malloc(pRPA->nr_Q_BLCYC * pRPA->nc_Q_BLCYC * sizeof(double _Complex));
+    }
+    // #else
+    // pRPA->useLAPACK = 1;
+    // #endif
 }

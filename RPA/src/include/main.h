@@ -26,6 +26,31 @@ typedef struct _RPA_OBJ {
     int rank0nuChi0EigscommInWorld;
     MPI_Comm nuChi0EigsBridgeComm; // communicator for linking ALL processors having the same rank of nuChi0EigsComm. Every nuChi0EigsComm needs
     // a complete set of eigenvalues, eigenvectors and occupations from K-S DFT calculation
+    MPI_Comm nuChi0BlacsComm; // communicator for using blacs to do calculation between nuChi0Eigscomms
+    int ictxt_blacs;    // fortran handle for the context corresponding to blacscomm (for ScaLAPACK) (LOCAL)
+    int ictxt_blacs_topo;  // fortran handle for the Cartesian topology within the ictxt_blacs context (for ScaLAPACK) (LOCAL)
+    int nprow_ictxt_blacs_topo; // number of rows in the ScaLAPACK context ictxt_blacs_topo (LOCAL)
+    int npcol_ictxt_blacs_topo; // number of cols in the ScaLAPACK context ictxt_blacs_topo (LOCAL)
+    int desc_orbitals[9];  // ScaLAPACK descriptor for storage of the orbitals on each blacscomm
+    int desc_orb_BLCYC[9]; // descriptor for BLOCK CYCLIC distribution of the orbitals on each blacscomm
+    int desc_Hp_BLCYC[9];  // descriptor for BLOCK CYCLIC distribution of the projected Hamiltonian on each ictxt_blacs_topo
+    int desc_Mp_BLCYC[9];  // descriptor for BLOCK CYCLIC distribution of the overlap matrix on each ictxt_blacs_topo
+    int desc_Q_BLCYC[9];   // descriptor for BLOCK CYCLIC distribution of the eigenvectors on each ictxt_blacs_topo
+    int nr_orb_BLCYC;          // number of rows of the local distributed orbitals owned by the process (LOCAL)
+    int nc_orb_BLCYC;          // number of cols of the local distributed orbitals owned by the process (LOCAL)
+    int nr_Hp_BLCYC;           // number of rows of the local distributed projected Hamiltonian owned by the process (LOCAL)
+    int nc_Hp_BLCYC;           // number of cols of the local distributed projected Hamiltonian owned by the process (LOCAL)
+    int nr_Mp_BLCYC;           // number of rows of the local distributed projected Hamiltonian owned by the process (LOCAL)
+    int nc_Mp_BLCYC;           // number of cols of the local distributed projected Hamiltonian owned by the process (LOCAL)
+    int nr_Q_BLCYC;            // number of rows of the local distributed subspace eigenvectors owned by the process (LOCAL)
+    int nc_Q_BLCYC;            // number of cols of the local distributed subspace eigenvectors owned by the process (LOCAL)
+    double *Hp;                   // projected Hamiltonian matrix: Hp = Psi' * H * Psi (LOCAL)
+    double *Mp;                   // projected mass matrix: Mp = Psi' * Psi (LOCAL)
+    double *Q;                    // eigenvectors of the generalized eigenproblem: Hp * Q_i  = lambda_i * Mp * Q_i
+    double _Complex *Hp_kpt;                   // projected Hamiltonian matrix: Hp = Psi' * H * Psi (LOCAL)
+    double _Complex *Mp_kpt;                   // projected mass matrix: Mp = Psi' * Psi (LOCAL)
+    double _Complex *Q_kpt;                    // eigenvectors of the generalized eigenproblem: Hp * Q_i  = lambda_i * Mp * Q_i
+    int useLAPACK;                // flag for using LAPACK_dsygv to solve subspace eigenproblem
     int nuChi0EigsBridgeCommIndex; // which equals to rank of the processor in nuChi0Eigscomm
     // SPARC parallelizing parameters to be used in RPA calculation
     int npspin;         // number of spin communicators

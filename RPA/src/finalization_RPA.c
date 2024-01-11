@@ -33,6 +33,16 @@ void finalize_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA) {
     // free communicators
     MPI_Comm_free(&pRPA->nuChi0Eigscomm);
     MPI_Comm_free(&pRPA->nuChi0EigsBridgeComm);
+    MPI_Comm_free(&pRPA->nuChi0BlacsComm);
+    if (pSPARC->isGammaPoint) {
+        free(pRPA->Hp);
+        free(pRPA->Mp);
+        free(pRPA->Q);
+    } else {
+        free(pRPA->Hp_kpt);
+        free(pRPA->Mp_kpt);
+        free(pRPA->Q_kpt);
+    }
     if (pRPA->nuChi0EigscommIndex != -1) {
         if (pSPARC->dmcomm_phi != MPI_COMM_NULL) {
             if (pSPARC->isGammaPoint) {
