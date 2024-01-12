@@ -30,6 +30,9 @@ void finalize_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA) {
     free(pRPA->omega);
     free(pRPA->omega01);
     free(pRPA->omegaWts);
+    // free eigs
+    free(pRPA->RRnuChi0Eigs);
+    free(pRPA->RRnuChi0EigVecs);
     // free communicators
     MPI_Comm_free(&pRPA->nuChi0Eigscomm);
     MPI_Comm_free(&pRPA->nuChi0EigsBridgeComm);

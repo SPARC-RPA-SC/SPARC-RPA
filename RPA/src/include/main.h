@@ -85,6 +85,8 @@ typedef struct _RPA_OBJ {
     double *omegaWts;
     // amount of eigenvalues of \nu\chi0 to be solved
     int nuChi0Neig;
+    double _Complex *RRnuChi0Eigs;
+    double *RRnuChi0EigVecs;
     // symmetric reduced k-point grid, saved for reading orbitals
     int Nkpts_sym;
     double *kptWts;
