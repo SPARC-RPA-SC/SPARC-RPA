@@ -215,16 +215,42 @@ void cheFSI_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int omegaIndex) 
     // while (flagCheb) {
         if (pSPARC->isGammaPoint) {
             chebyshev_filtering_gamma(pSPARC, pRPA, omegaIndex, minEig, lambdaCutoff, chebyshevDegree, flagNoDmcomm, printFlag);
-            nuChi0_multiply_DeltaV_gamma(pSPARC, pRPA, omegaIndex, pRPA->Ys_phi, pRPA->deltaVs_phi, pRPA->nNuChi0Eigscomm, flagNoDmcomm); // deltaVs_phi = (\nu\chi0)*Ys_phi for saving memory
-            project_YT_nuChi0_Y_gamma(pRPA, omegaIndex, flagNoDmcomm, pSPARC->dmcomm_phi, pSPARC->Nd_d, pSPARC->Nspinor_eig, pSPARC->isGammaPoint, printFlag);
-            // generalized_eigenproblem_solver_gamma();
-            // subspace_rotation_gamma();
+            if (pRPA->npnuChi0Neig > 1) {
+                pRPA->Ys_phi_BLCYC = (double *)malloc(pRPA->nr_orb_BLCYC * pRPA->nc_orb_BLCYC * sizeof(double));
+            } else {
+                pRPA->Ys_phi_BLCYC = pRPA->Ys_phi;
+            }
+            YT_multiply_Y_gamma(pRPA, pSPARC->dmcomm_phi, pSPARC->Nd_d, pSPARC->Nspinor_eig, printFlag);
+            if (!pRPA->eig_useLAPACK) { // if we use ScaLapack, not Lapack, to solve eigenpairs of YT*\nu\Chi0*Y, we have to orthogonalize Y
+                // because ScaLapack does not support solving AX = BX\Lambda with non-symmetric A or B
+                Y_orth_gamma(pRPA, pSPARC->Nd_d, pSPARC->Nspinor_eig);
+            }
+            nuChi0_mult_vectors_gamma(pSPARC, pRPA, omegaIndex, pRPA->Ys_phi, pRPA->deltaVs_phi, pRPA->nNuChi0Eigscomm, flagNoDmcomm); // deltaVs_phi = (\nu\chi0)*Ys_phi for saving memory
+            project_YT_nuChi0_Y_gamma(pRPA, pSPARC->dmcomm_phi, pSPARC->Nd_d, pSPARC->Nspinor_eig, printFlag);
+            generalized_eigenproblem_solver_gamma(pRPA, pSPARC->dmcomm_phi, printFlag);
+            subspace_rotation_eigVecs_gamma(pSPARC, pRPA, pSPARC->dmcomm_phi, pSPARC->Nd_d, pSPARC->Nspinor_eig,  pRPA->deltaVs_phi, printFlag);
+            if (pRPA->npnuChi0Neig > 1) {
+                free(pRPA->Ys_phi_BLCYC);
+            }
         } else {
             chebyshev_filtering_kpt(pSPARC, pRPA, qptIndex, omegaIndex, minEig, lambdaCutoff, chebyshevDegree, flagNoDmcomm, printFlag);
-            nuChi0_multiply_DeltaV_kpt(pSPARC, pRPA, qptIndex, omegaIndex, pRPA->Ys_kpt_phi, pRPA->deltaVs_kpt_phi, pRPA->nNuChi0Eigscomm, flagNoDmcomm); // deltaVs_kpt_phi = (\nu\chi0)*Ys_kpt_phi for saving memory
+            if (pRPA->npnuChi0Neig > 1) {
+                pRPA->Ys_kpt_phi_BLCYC = (double _Complex*)malloc(pRPA->nr_orb_BLCYC * pRPA->nc_orb_BLCYC * sizeof(double));
+            } else {
+                pRPA->Ys_kpt_phi_BLCYC = pRPA->Ys_kpt_phi;
+            }
+            YT_multiply_Y_kpt(pRPA, pSPARC->dmcomm_phi, pSPARC->Nd_d, pSPARC->Nspinor_eig, printFlag);
+            // if (!pRPA->eig_useLAPACK) { // if we use ScaLapack, not Lapack, to solve eigenpairs of YT*\nu\Chi0*Y, we have to orthogonalize Y
+            //     // because ScaLapack does not support solving AX = BX\Lambda with non-symmetric A or B
+            //     Y_orth_kpt(pRPA, pSPARC->Nd_d, pSPARC->Nspinor_eig);
+            // }
+            nuChi0_mult_vectors_kpt(pSPARC, pRPA, qptIndex, omegaIndex, pRPA->Ys_kpt_phi, pRPA->deltaVs_kpt_phi, pRPA->nNuChi0Eigscomm, flagNoDmcomm); // deltaVs_kpt_phi = (\nu\chi0)*Ys_kpt_phi for saving memory
             project_YT_nuChi0_Y_kpt(pRPA, qptIndex, omegaIndex, flagNoDmcomm, pSPARC->dmcomm_phi, pSPARC->Nd_d, pSPARC->Nspinor_eig, pSPARC->isGammaPoint, printFlag);
-            // generalized_eigenproblem_solver_kpt();
-            // subspace_rotation_kpt();
+            // generalized_eigenproblem_solver_kpt(pRPA, pSPARC->dmcomm_phi, printFlag);
+            // subspace_rotation_eigVecs_kpt(pSPARC, pRPA, pSPARC->dmcomm_phi, pSPARC->Nd_d, pSPARC->Nspinor_eig,  pRPA->deltaVs_phi, printFlag);
+            if (pRPA->npnuChi0Neig > 1) {
+                free(pRPA->Ys_kpt_phi_BLCYC);
+            }
         }
     // }
 }
@@ -244,7 +270,7 @@ double find_min_eigenvalue(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int o
                 loopFlag = 0;
             }
             minEig = -vec2norm;
-            nuChi0_multiply_DeltaV_gamma(pSPARC, pRPA, omegaIndex, pRPA->deltaVs_phi, pRPA->deltaVs_phi, nuChi0EigsAmount, flagNoDmcomm);
+            nuChi0_mult_vectors_gamma(pSPARC, pRPA, omegaIndex, pRPA->deltaVs_phi, pRPA->deltaVs_phi, nuChi0EigsAmount, flagNoDmcomm);
             if (pSPARC->dmcomm_phi != MPI_COMM_NULL) {
                 Vector2Norm(pRPA->deltaVs_phi, pSPARC->Nd_d, &vec2norm, pSPARC->dmcomm_phi);
                 VectorScale(pRPA->deltaVs_phi, pSPARC->Nd_d, 1.0/vec2norm, pSPARC->dmcomm_phi);
@@ -254,7 +280,7 @@ double find_min_eigenvalue(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int o
                 loopFlag = 0;
             }
             minEig = -vec2norm;
-            nuChi0_multiply_DeltaV_kpt(pSPARC, pRPA, qptIndex, omegaIndex, pRPA->deltaVs_kpt_phi, pRPA->deltaVs_kpt_phi, nuChi0EigsAmount, flagNoDmcomm);
+            nuChi0_mult_vectors_kpt(pSPARC, pRPA, qptIndex, omegaIndex, pRPA->deltaVs_kpt_phi, pRPA->deltaVs_kpt_phi, nuChi0EigsAmount, flagNoDmcomm);
             if (pSPARC->dmcomm_phi != MPI_COMM_NULL) {
                 Vector2Norm_complex(pRPA->deltaVs_kpt_phi, pSPARC->Nd_d, &vec2norm, pSPARC->dmcomm_phi);
                 VectorScaleComplex(pRPA->deltaVs_kpt_phi, pSPARC->Nd_d, 1.0/vec2norm, pSPARC->dmcomm_phi);

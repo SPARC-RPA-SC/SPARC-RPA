@@ -33,14 +33,14 @@ void chebyshev_filtering_kpt(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int
     double _Complex *Ys = pRPA->Ys_kpt_phi;
     double _Complex *Yt = (double _Complex*)calloc(sizeof(double _Complex), totalLength);
 
-    nuChi0_multiply_DeltaV_kpt(pSPARC, pRPA, qptIndex, omegaIndex, Xs, Ys, nuChi0EigsAmount, flagNoDmcomm);
+    nuChi0_mult_vectors_kpt(pSPARC, pRPA, qptIndex, omegaIndex, Xs, Ys, nuChi0EigsAmount, flagNoDmcomm);
     for (int index = 0; index < totalLength; index++) {
         Ys[index] = (Ys[index] - c*Xs[index]) * (sigma/e);
     }
 
     for (int time = 0; time < chebyshevDegree; time++) {
         sigmaNew = 1.0 / (tau - sigma);
-        nuChi0_multiply_DeltaV_kpt(pSPARC, pRPA, qptIndex, omegaIndex, Ys, Yt, nuChi0EigsAmount, flagNoDmcomm);
+        nuChi0_mult_vectors_kpt(pSPARC, pRPA, qptIndex, omegaIndex, Ys, Yt, nuChi0EigsAmount, flagNoDmcomm);
         for (int index = 0; index < totalLength; index++) {
             Yt[index] = (Yt[index] - c*Ys[index])*(2.0*sigmaNew/e) - (sigma*sigmaNew)*Xs[index];
         }
@@ -51,7 +51,7 @@ void chebyshev_filtering_kpt(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int
     free(Yt);
 }
 
-void project_YT_nuChi0_Y_kpt(RPA_OBJ* pRPA, int qptIndex, int omegaIndex, int flagNoDmcomm, MPI_Comm dmcomm_phi, int DMnd, int Nspinor_eig, int isGammaPoint, int printFlag) {
+void YT_multiply_Y_kpt(RPA_OBJ* pRPA, MPI_Comm dmcomm_phi, int DMnd, int Nspinor_eig, int printFlag) {
     if (dmcomm_phi == MPI_COMM_NULL) return;
 // #if defined(USE_MKL) || defined(USE_SCALAPACK)
     int nproc_dmcomm_phi, rankWorld;
@@ -69,7 +69,6 @@ void project_YT_nuChi0_Y_kpt(RPA_OBJ* pRPA, int qptIndex, int omegaIndex, int fl
 
     double _Complex alpha = 1.0, beta = 0.0;
     double _Complex *Y = pRPA->Ys_kpt_phi;
-    double _Complex *HY = pRPA->deltaVs_kpt_phi;
     // allocate memory for block cyclic format of the wavefunction
     double _Complex *Y_BLCYC;
     t3 = MPI_Wtime();
@@ -114,7 +113,7 @@ void project_YT_nuChi0_Y_kpt(RPA_OBJ* pRPA, int qptIndex, int omegaIndex, int fl
     t2 = MPI_Wtime();
 #ifdef DEBUG
     if(!rankWorld) 
-        printf("rank = %2d, Psi'*Psi in block cyclic format in each blacscomm took %.3f ms\n", 
+        printf("rank = %2d, YT'*Y in block cyclic format in each blacscomm took %.3f ms\n", 
                 rankWorld, (t2 - t1)*1e3); 
 #endif
     t1 = MPI_Wtime();
@@ -126,11 +125,41 @@ void project_YT_nuChi0_Y_kpt(RPA_OBJ* pRPA, int qptIndex, int omegaIndex, int fl
     t2 = MPI_Wtime();
     t4 = MPI_Wtime();
 #ifdef DEBUG
-    if(!rankWorld) printf("rank = %2d, Allreduce to sum Psi'*Psi over dmcomm took %.3f ms\n", 
+    if(!rankWorld) printf("rank = %2d, Allreduce to sum YT'*Y over dmcomm took %.3f ms\n", 
                      rankWorld, (t2 - t1)*1e3); 
     if(!rankWorld) printf("rank = %2d, Distribute data + matrix mult took %.3f ms\n", 
                      rankWorld, (t4 - t3)*1e3);
 #endif
+    if (size_blacscomm > 1) {
+        free(Y_BLCYC);
+    }
+#ifdef DEBUG
+    et = MPI_Wtime();
+    if (!rankWorld) printf("Rank 0, YT*Y used %.3lf ms\n", 1000.0 * (et - st)); 
+#endif
+}
+
+void project_YT_nuChi0_Y_kpt(RPA_OBJ* pRPA, int qptIndex, int omegaIndex, int flagNoDmcomm, MPI_Comm dmcomm_phi, int DMnd, int Nspinor_eig, int isGammaPoint, int printFlag) {
+    if (dmcomm_phi == MPI_COMM_NULL) return;
+// #if defined(USE_MKL) || defined(USE_SCALAPACK)
+    int nproc_dmcomm_phi, rankWorld;
+    MPI_Comm_size(dmcomm_phi, &nproc_dmcomm_phi);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rankWorld);
+    int size_blacscomm = pRPA->npnuChi0Neig;
+
+    double t1, t2;
+#ifdef DEBUG
+    double st, et;   
+    st = MPI_Wtime();
+#endif
+    int DMndspe = DMnd * Nspinor_eig;
+    int ONE = 1;
+
+    double _Complex alpha = 1.0, beta = 0.0;
+    double _Complex *HY = pRPA->deltaVs_kpt_phi;
+    // allocate memory for block cyclic format of the wavefunction
+    double _Complex *Y_BLCYC = pRPA->Ys_kpt_phi_BLCYC;
+
     double _Complex *HY_BLCYC;
     t1 = MPI_Wtime();
     if (size_blacscomm > 1) {
@@ -175,7 +204,6 @@ void project_YT_nuChi0_Y_kpt(RPA_OBJ* pRPA, int qptIndex, int omegaIndex, int fl
     if(!rankWorld) printf("global rank = %2d, finding Y'*HY took %.3f ms\n",rankWorld,(t2-t1)*1e3); 
 #endif
     if (size_blacscomm > 1) {
-        free(Y_BLCYC);
         free(HY_BLCYC);
     }
 
