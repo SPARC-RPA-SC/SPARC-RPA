@@ -13,6 +13,7 @@
 #include <mkl_scalapack.h>
 
 #include "eigenSolver.h"
+#include "tools.h"
 
 #include "main.h"
 #include "restoreElectronicGroundState.h"
@@ -320,7 +321,7 @@ void project_YT_nuChi0_Y_gamma(RPA_OBJ* pRPA, MPI_Comm dmcomm_phi, int DMnd, int
 }
 
 
-void generalized_eigenproblem_solver_gamma(RPA_OBJ* pRPA, MPI_Comm dmcomm_phi, int printFlag) {
+void generalized_eigenproblem_solver_gamma(RPA_OBJ* pRPA, MPI_Comm dmcomm_phi, int *signImag, int printFlag) {
     if (dmcomm_phi == MPI_COMM_NULL) return;
 // #if defined(USE_MKL) || defined(USE_SCALAPACK)
     int nproc_dmcomm_phi, rankWorld;
@@ -337,18 +338,28 @@ void generalized_eigenproblem_solver_gamma(RPA_OBJ* pRPA, MPI_Comm dmcomm_phi, i
             double *alphar = (double *)malloc(sizeof(double) * pRPA->nuChi0Neig);
             double *alphai = (double *)malloc(sizeof(double) * pRPA->nuChi0Neig);
             double *beta = (double *)malloc(sizeof(double) * pRPA->nuChi0Neig);
+            int *sortedIndex = (int *)malloc(sizeof(int) * pRPA->nuChi0Neig);
             double *vl = (double *)malloc(sizeof(double) * pRPA->nr_Hp_BLCYC * pRPA->nc_Hp_BLCYC);
             int ldvl =  pRPA->nuChi0Neig;
             info = LAPACKE_dggev(LAPACK_COL_MAJOR, 'N', 'V', pRPA->nuChi0Neig, pRPA->Hp, pRPA->nuChi0Neig, pRPA->Mp, pRPA->nuChi0Neig, 
                 alphar, alphai, beta, vl, ldvl, pRPA->RRnuChi0EigVecs, pRPA->nuChi0Neig);
             for (int i = 0; i < pRPA->nuChi0Neig; i++) {
-                pRPA->RRnuChi0Eigs[i] = (alphar[i] + alphai[i]*I) / beta[i];
+                alphar[i] = alphar[i] / beta[i];
+                if (alphai[i] / beta[i] > 1e-5) *signImag = 1;
+            }
+            Sort(alphar, pRPA->nuChi0Neig, pRPA->RRnuChi0Eigs, sortedIndex);
+            printf("global rank %d, the first 3 eigenvalues are %.5E, %.5E, %.5E\n", rankWorld, pRPA->RRnuChi0Eigs[0], pRPA->RRnuChi0Eigs[1], pRPA->RRnuChi0Eigs[2]);
+            int dmcomm_phiRank;
+            MPI_Comm_rank(dmcomm_phi, &dmcomm_phiRank);
+            if (!dmcomm_phiRank){
+                FILE *eigfile = fopen("eig.txt", "a");
+                for (int col = 0; col < pRPA->nuChi0Neig; col++) {
+                    fprintf(eigfile, "%12.9f ", pRPA->RRnuChi0Eigs[col]);
+                }
+                fprintf(eigfile, "\n");
+                fclose(eigfile);
             }
             if (printFlag) {
-                printf("global rank %d, the first 3 eigenvalues are %.5E %.5Ei, %.5E %.5Ei, %.5E %.5Ei\n", rankWorld, creal(pRPA->RRnuChi0Eigs[0]),
-                     cimag(pRPA->RRnuChi0Eigs[0]), creal(pRPA->RRnuChi0Eigs[1]), cimag(pRPA->RRnuChi0Eigs[1]), creal(pRPA->RRnuChi0Eigs[2]), cimag(pRPA->RRnuChi0Eigs[2]));
-                int dmcomm_phiRank;
-                MPI_Comm_rank(dmcomm_phi, &dmcomm_phiRank);
                 if (!dmcomm_phiRank){
                     FILE *eigVecfile = fopen("eigVec.txt", "w");
                     for (int row = 0; row < pRPA->nr_Hp_BLCYC; row++) {
@@ -363,6 +374,7 @@ void generalized_eigenproblem_solver_gamma(RPA_OBJ* pRPA, MPI_Comm dmcomm_phi, i
             free(alphar);
             free(alphai);
             free(beta);
+            free(sortedIndex);
             free(vl);
         }
         t2 = MPI_Wtime();
@@ -398,7 +410,7 @@ void generalized_eigenproblem_solver_gamma(RPA_OBJ* pRPA, MPI_Comm dmcomm_phi, i
 // #endif // #if defined(USE_MKL) || defined(USE_SCALAPACK)
 }
 
-void subspace_rotation_eigVecs_gamma(SPARC_OBJ* pSPARC, RPA_OBJ* pRPA, MPI_Comm dmcomm_phi, int DMnd, int Nspinor_eig, double *rotatedEigVecs, int printFlag) {
+void subspace_rotation_unify_eigVecs_gamma(SPARC_OBJ* pSPARC, RPA_OBJ* pRPA, MPI_Comm dmcomm_phi, int DMnd, int Nspinor_eig, double *rotatedEigVecs, int printFlag) {
     if (dmcomm_phi != MPI_COMM_NULL) {
         // #if defined(USE_MKL) || defined(USE_SCALAPACK)
 #ifdef DEBUG
@@ -456,6 +468,11 @@ void subspace_rotation_eigVecs_gamma(SPARC_OBJ* pSPARC, RPA_OBJ* pRPA, MPI_Comm 
         double et = MPI_Wtime();
         if (!rankWorld) printf("global rank = %d, Subspace_Rotation used %.3lf ms\n\n", rankWorld, 1000.0 * (et - st));
 #endif
+        for (int i = 0; i < pRPA->nNuChi0Eigscomm; i++) {
+            double vec2norm;
+            Vector2Norm(rotatedEigVecs + i*DMndspe, DMndspe, &vec2norm, dmcomm_phi);
+            VectorScale(rotatedEigVecs + i*DMndspe, DMndspe, 1.0/vec2norm, dmcomm_phi); // unify the length of \Delta V
+        }
 // #endif // (USE_MKL or USE_SCALAPACK)
     }
 

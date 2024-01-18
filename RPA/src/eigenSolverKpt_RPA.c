@@ -139,6 +139,10 @@ void YT_multiply_Y_kpt(RPA_OBJ* pRPA, MPI_Comm dmcomm_phi, int DMnd, int Nspinor
 #endif
 }
 
+void Y_orth_kpt(RPA_OBJ* pRPA, int DMnd, int Nspinor_eig) {
+
+}
+
 void project_YT_nuChi0_Y_kpt(RPA_OBJ* pRPA, int qptIndex, int omegaIndex, int flagNoDmcomm, MPI_Comm dmcomm_phi, int DMnd, int Nspinor_eig, int isGammaPoint, int printFlag) {
     if (dmcomm_phi == MPI_COMM_NULL) return;
 // #if defined(USE_MKL) || defined(USE_SCALAPACK)
@@ -212,4 +216,12 @@ void project_YT_nuChi0_Y_kpt(RPA_OBJ* pRPA, int qptIndex, int omegaIndex, int fl
     if (!rankWorld) printf("Rank 0, project_nuChi0 used %.3lf ms\n", 1000.0 * (et - st)); 
 #endif
 // // #endif // #if defined(USE_MKL) || defined(USE_SCALAPACK)
+}
+
+void generalized_eigenproblem_solver_kpt(RPA_OBJ* pRPA, MPI_Comm dmcomm_phi, int *signImag, int printFlag) {
+
+}
+
+void subspace_rotation_unify_eigVecs_kpt(SPARC_OBJ* pSPARC, RPA_OBJ* pRPA, MPI_Comm dmcomm_phi, int DMnd, int Nspinor_eig, double *rotatedEigVecs, int printFlag) {
+
 }
