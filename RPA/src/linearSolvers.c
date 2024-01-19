@@ -106,9 +106,11 @@ int block_COCG(void (*lhsfun)(SPARC_OBJ*, int, double, double, double *, double 
         info = LAPACKE_zsysv( LAPACK_COL_MAJOR, 'L', nuChi0EigsAmounts, nuChi0EigsAmounts, lapackRho, nuChi0EigsAmounts, ipiv, beta, nuChi0EigsAmounts ); // beta = rho \ rho_new;
         memcpy(rho, rhoNew, sizeof(double _Complex)*nuChi0EigsAmounts*nuChi0EigsAmounts); // rho = rho_new;
     }
-    printf("block COCG iterated for %d times; residual %.6E\n", ix, resNormRecords[ix*nuChi0EigsAmounts]);
+    printf("block COCG iterated for %d times; residual %.6E", ix, resNormRecords[ix*nuChi0EigsAmounts]);
     if (ix == maxIter) {
-        printf("block COCG terminated without converging to the desired tolerance.\n");
+        printf("It terminated without converging to the desired tolerance.\n");
+    } else {
+        printf("\n");
     }
 
     free(RHS2norm);

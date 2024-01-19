@@ -19,8 +19,7 @@
 #include "eigenSolverKpt_RPA.h"
 #include "tools_RPA.h"
 
-void chebyshev_filtering_kpt(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int omegaIndex, double minEig, double lambdaCutoff, int chebyshevDegree, int flagNoDmcomm, int printFlag) {
-    double maxEig = -minEig;
+void chebyshev_filtering_kpt(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int omegaIndex, double minEig, double maxEig, double lambdaCutoff, int chebyshevDegree, int flagNoDmcomm, int printFlag) {
     double e = (maxEig - lambdaCutoff) / 2.0;
     double c = (lambdaCutoff + maxEig) / 2.0;
     double sigma = e / (c - minEig);

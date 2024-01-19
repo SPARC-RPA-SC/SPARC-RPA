@@ -22,8 +22,7 @@
 #include "eigenSolverGamma_RPA.h"
 #include "tools_RPA.h"
 
-void chebyshev_filtering_gamma(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int omegaIndex, double minEig, double lambdaCutoff, int chebyshevDegree, int flagNoDmcomm, int printFlag) {
-    double maxEig = -minEig;
+void chebyshev_filtering_gamma(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int omegaIndex, double minEig, double maxEig, double lambdaCutoff, int chebyshevDegree, int flagNoDmcomm, int printFlag) {
     double e = (maxEig - lambdaCutoff) / 2.0;
     double c = (lambdaCutoff + maxEig) / 2.0;
     double sigma = e / (c - minEig);
@@ -105,7 +104,14 @@ void chebyshev_filtering_gamma(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int omegaIndex,
             }
         }
     }
-        
+    
+    if (pSPARC->dmcomm_phi != MPI_COMM_NULL) {
+        for (int i = 0; i < pRPA->nNuChi0Eigscomm; i++) {
+            double vec2norm;
+            Vector2Norm(Ys + i*pSPARC->Nd_d, pSPARC->Nd_d, &vec2norm, pSPARC->dmcomm_phi);
+            VectorScale(Ys + i*pSPARC->Nd_d, pSPARC->Nd_d, 1.0/vec2norm, pSPARC->dmcomm_phi); // unify the length of \Delta V
+        }
+    }
     free(Yt);
 }
 
