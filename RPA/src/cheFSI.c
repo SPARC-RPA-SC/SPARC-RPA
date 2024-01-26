@@ -70,14 +70,14 @@ void test_Hx_nuChi0(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA) {
         int printFlag = 1;
         int qptIndex = 1;
         int omegaIndex = 0;
-        int nuChi0EigsAmount = pRPA->nNuChi0Eigscomm;
+        int nuChi0EigsAmount = 1;// pRPA->nNuChi0Eigscomm;
         if (qptIndex > pRPA->Nqpts_sym - 1)
             qptIndex = pRPA->Nqpts_sym - 1;
         if (omegaIndex > pRPA->Nomega - 1)
             omegaIndex = pRPA->Nomega - 1;
         int Nd_d_dmcomm = pSPARC->Nd_d_dmcomm;
         if (pSPARC->isGammaPoint) {
-            for (int nuChi0EigIndex = 0; nuChi0EigIndex < pRPA->nNuChi0Eigscomm; nuChi0EigIndex++) {
+            for (int nuChi0EigIndex = 0; nuChi0EigIndex < nuChi0EigsAmount; nuChi0EigIndex++) {
                 Transfer_Veff_loc_RPA(pSPARC, pRPA->nuChi0Eigscomm, pRPA->deltaVs_phi + nuChi0EigIndex*pSPARC->Nd_d, pRPA->deltaVs + nuChi0EigIndex*pSPARC->Nd_d_dmcomm); // it tansfer \Delta V at here
             }
             if ((pRPA->nuChi0EigscommIndex == pRPA->npnuChi0Neig - 1) && (pSPARC->spincomm_index == 0) && (pSPARC->bandcomm_index == 0) && (pSPARC->dmcomm != MPI_COMM_NULL)) { // print all \Delta V vectors of the last nuChi0Eigscomm.
@@ -91,7 +91,7 @@ void test_Hx_nuChi0(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA) {
                         printf("error printing delta Vs in test\n");
                         exit(EXIT_FAILURE);
                     } else {
-                        for (int nuChi0EigIndex = 0; nuChi0EigIndex < pRPA->nNuChi0Eigscomm; nuChi0EigIndex++) {
+                        for (int nuChi0EigIndex = 0; nuChi0EigIndex < nuChi0EigsAmount; nuChi0EigIndex++) {
                             for (int index = 0; index < Nd_d_dmcomm; index++) {
                                 fprintf(output1stDV, "%12.9f\n", pRPA->deltaVs[nuChi0EigIndex*Nd_d_dmcomm + index]);
                             }
@@ -107,7 +107,7 @@ void test_Hx_nuChi0(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA) {
             collect_transfer_deltaRho_gamma(pSPARC, pRPA->deltaRhos, pRPA->deltaRhos_phi, nuChi0EigsAmount, printFlag, pRPA->nuChi0Eigscomm);
             Calculate_deltaRhoPotential_gamma(pSPARC, pRPA->deltaRhos_phi, pRPA->deltaVs_phi, nuChi0EigsAmount, printFlag, pRPA->deltaVs, pRPA->nuChi0EigscommIndex, pRPA->nuChi0Eigscomm);
         } else {
-            for (int nuChi0EigIndex = 0; nuChi0EigIndex < pRPA->nNuChi0Eigscomm; nuChi0EigIndex++) {
+            for (int nuChi0EigIndex = 0; nuChi0EigIndex < nuChi0EigsAmount; nuChi0EigIndex++) {
                 Transfer_Veff_loc_RPA_kpt(pSPARC, pRPA->nuChi0Eigscomm, pRPA->deltaVs_kpt_phi + nuChi0EigIndex*pSPARC->Nd_d, pRPA->deltaVs_kpt + nuChi0EigIndex*pSPARC->Nd_d_dmcomm); // it tansfer \Delta V at here
             }
             if ((pRPA->nuChi0EigscommIndex == pRPA->npnuChi0Neig - 1) && (pSPARC->spincomm_index == 0) && (pSPARC->kptcomm_index == 0) && (pSPARC->bandcomm_index == 0) && (pSPARC->dmcomm != MPI_COMM_NULL)) { // print the first \Delta V vector of the last nuChi0Eigscomm.
@@ -121,7 +121,7 @@ void test_Hx_nuChi0(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA) {
                         printf("error printing delta Vs in test\n");
                         exit(EXIT_FAILURE);
                     } else {
-                        for (int nuChi0EigIndex = 0; nuChi0EigIndex < pRPA->nNuChi0Eigscomm; nuChi0EigIndex++) {
+                        for (int nuChi0EigIndex = 0; nuChi0EigIndex < nuChi0EigsAmount; nuChi0EigIndex++) {
                             for (int index = 0; index < Nd_d_dmcomm; index++) {
                                 fprintf(output1stDV, "%12.9f %12.9f\n", creal(pRPA->deltaVs_kpt[nuChi0EigIndex*Nd_d_dmcomm + index]), cimag(pRPA->deltaVs_kpt[nuChi0EigIndex*Nd_d_dmcomm + index]));
                             }
@@ -223,14 +223,14 @@ void cheFSI_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int omegaIndex) 
     int flagCheb = 1;
     int ncheb = 0;
     int signImag = 0;
-    int chebyshevDegree = 2;
+    int chebyshevDegree = pRPA->ChebDegreeRPA;
     int printFlag = 0;
     double ErpaTerm = 1000.0, lastErpaTerm = 0.0, t1 = 0.0, t2 = 0.0;
     while (flagCheb) {
         t1 = MPI_Wtime();
         if (ncheb) {
-            maxEig = -pRPA->RRnuChi0Eigs[pRPA->nuChi0Neig];
-            lambdaCutoff = pRPA->RRnuChi0Eigs[pRPA->nuChi0Neig] + 1e-4;
+            maxEig = -pRPA->RRnuChi0Eigs[pRPA->nuChi0Neig - 1];
+            lambdaCutoff = pRPA->RRnuChi0Eigs[pRPA->nuChi0Neig - 1] + 1e-4;
         }
         if (pSPARC->isGammaPoint) {
             chebyshev_filtering_gamma(pSPARC, pRPA, omegaIndex, minEig, maxEig, lambdaCutoff, chebyshevDegree, flagNoDmcomm, printFlag);
@@ -286,10 +286,11 @@ void cheFSI_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int omegaIndex) 
             MPI_Bcast(&flagCheb, 1, MPI_INT, 0, pRPA->nuChi0Eigscomm);
         }
         MPI_Bcast(&flagCheb, 1, MPI_INT, 0, pRPA->nuChi0EigsBridgeComm); // broadcast the flag to all processors of all nuChi0Eigscomms
+        MPI_Bcast(pRPA->RRnuChi0Eigs, pRPA->nuChi0Neig, MPI_DOUBLE, 0, pRPA->nuChi0EigsBridgeComm); // broadcast the eigenvalues to all processors of all nuChi0Eigscomms
         t2 = MPI_Wtime();
         if ((!pRPA->nuChi0EigscommIndex) && (!rank)) {
             FILE *output_fp = fopen(pRPA->filename_out,"a");
-            fprintf(output_fp,"%5d   %.5f       ", ncheb, ErpaTerm, outputEigAmount);
+            fprintf(output_fp,"%5d   %.5f       ", ncheb, ErpaTerm);
             for (int eigIndex = 0; eigIndex < outputEigAmount; eigIndex++) {
                 fprintf(output_fp, "%.5f ", pRPA->RRnuChi0Eigs[eigIndex]);
             }
@@ -297,9 +298,9 @@ void cheFSI_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int omegaIndex) 
             fclose(output_fp);
         }
         ncheb++;
-        if (ncheb == 6) printFlag = 1;
+        // if (ncheb == 4) printFlag = 1;
     }
-    pRPA->ErpaTerms[qptIndex*pRPA->Nomega + omegaIndex] = ErpaTerm; // Reminder: ONLY the 0th thread of 0th nuChi0Eigscomm has the correct ErpaTerms!
+    pRPA->ErpaTerms[qptIndex*pRPA->Nomega + omegaIndex] = ErpaTerm;
 }
 
 double find_min_eigenvalue(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int omegaIndex, int flagNoDmcomm) { // find min eigenvalue by power method
@@ -312,27 +313,27 @@ double find_min_eigenvalue(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int o
     int iter = 0;
     int nuChi0EigsAmount = 1;
     while (loopFlag) {
+        if ((fabs(-vec2norm - minEig) < 2e-4) || (iter == maxIter)) {
+            loopFlag = 0;
+        }
+        minEig = -vec2norm;
         if (pSPARC->isGammaPoint) {
-            if ((fabs(-vec2norm - minEig) < 2e-4) || (iter == maxIter)) {
-                loopFlag = 0;
-            }
-            minEig = -vec2norm;
             nuChi0_mult_vectors_gamma(pSPARC, pRPA, omegaIndex, pRPA->deltaVs_phi, pRPA->deltaVs_phi, nuChi0EigsAmount, flagNoDmcomm);
             if (pSPARC->dmcomm_phi != MPI_COMM_NULL) {
                 Vector2Norm(pRPA->deltaVs_phi, pSPARC->Nd_d, &vec2norm, pSPARC->dmcomm_phi);
                 VectorScale(pRPA->deltaVs_phi, pSPARC->Nd_d, 1.0/vec2norm, pSPARC->dmcomm_phi);
             }
         } else {
-            if ((fabs(-vec2norm - minEig) < 2e-4) || (iter == maxIter) || (!pSPARC->isGammaPoint)) { // current kpt calculation is not available
+            if (!pSPARC->isGammaPoint) { // current kpt calculation is not available
                 loopFlag = 0;
             }
-            minEig = -vec2norm;
             nuChi0_mult_vectors_kpt(pSPARC, pRPA, qptIndex, omegaIndex, pRPA->deltaVs_kpt_phi, pRPA->deltaVs_kpt_phi, nuChi0EigsAmount, flagNoDmcomm);
             if (pSPARC->dmcomm_phi != MPI_COMM_NULL) {
                 Vector2Norm_complex(pRPA->deltaVs_kpt_phi, pSPARC->Nd_d, &vec2norm, pSPARC->dmcomm_phi);
                 VectorScaleComplex(pRPA->deltaVs_kpt_phi, pSPARC->Nd_d, 1.0/vec2norm, pSPARC->dmcomm_phi);
             }
         }
+        MPI_Bcast(&vec2norm, 1, MPI_DOUBLE, 0, pRPA->nuChi0Eigscomm);
         iter++;
     }
     if (iter == maxIter) printf("qpt %d, omega %d, minimum eigenvalue does not reach the required accuracy.\n", qptIndex, omegaIndex);

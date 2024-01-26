@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <mpi.h>
+#include <math.h>
+#include <complex.h>
 
 #define MKL_Complex16 double _Complex
 #include "mkl.h"
@@ -40,7 +42,7 @@ int block_COCG(void (*lhsfun)(SPARC_OBJ*, int, double, double, double *, double 
     double _Complex *lapackRho = (double _Complex*)calloc(sizeof(double _Complex), nuChi0EigsAmounts*nuChi0EigsAmounts);
     // Reminder: if there is domain parallelization, then it is necessary to call pdgemm_ function in ScaLapack with blacs
     // to make the distributed matrix multiplication
-    double Nalpha = 1.0; double Nbeta = 0.0;
+    double _Complex Nalpha = 1.0; double _Complex Nbeta = 0.0;
     cblas_zgemm(CblasColMajor, CblasTrans, CblasNoTrans, nuChi0EigsAmounts, nuChi0EigsAmounts, DMnd,
                   &Nalpha, V, DMnd,
                   W, DMnd, &Nbeta,
@@ -141,13 +143,18 @@ int kpt_solver(void (*lhsfun)(SPARC_OBJ*, int, int, double, double, double _Comp
 }
 
 int judge_converge(int ix, int numVecs, const double *RHS2norm, double tol, const double *resNormRecords) {
-    int judge = 1;
-    for (int col = 0; col < numVecs; col++) {
-        if (resNormRecords[numVecs*ix + col] > RHS2norm[col]*tol) {
-            judge = 0;
-            break;
-        }
+    // int judge = 1;
+    // for (int col = 0; col < numVecs; col++) {
+    //     if (resNormRecords[numVecs*ix + col] > RHS2norm[col]*tol) {
+    //         judge = 0;
+    //         break;
+    //     }
+    // }
+    double sum = 0.0;
+    for (int i = 0; i < numVecs; i++) {
+        sum += resNormRecords[ix*numVecs + i];
     }
+    int judge = (sum / sqrt((double)numVecs)) > tol ? 0 : 1;
     return judge;
 }
 

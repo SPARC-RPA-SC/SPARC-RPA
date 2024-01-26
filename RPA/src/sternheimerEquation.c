@@ -150,6 +150,8 @@ double sternheimer_solver_gamma(SPARC_OBJ *pSPARC, int spn_i, double epsilon, do
     for (int nuChi0EigsIndex = 0; nuChi0EigsIndex < nuChi0EigsAmounts; nuChi0EigsIndex++) {
         for (int i = 0; i < DMnd; i++) {
             SternheimerRhs[nuChi0EigsIndex*DMnd + i] = -deltaVs[nuChi0EigsIndex*DMnd + i]*(psi[i]/sqrtdV); // the unit of \psi and \delta\psi in Sternheimer eq. are sqrt(e/V).
+            deltaPsisReal[nuChi0EigsIndex*DMnd + i] = 0.0;
+            deltaPsisImag[nuChi0EigsIndex*DMnd + i] = 0.0;
         }
     }
 

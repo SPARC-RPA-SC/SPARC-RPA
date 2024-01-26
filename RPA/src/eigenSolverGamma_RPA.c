@@ -44,18 +44,26 @@ void chebyshev_filtering_gamma(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int omegaIndex,
             MPI_Comm_rank(pSPARC->dmcomm, &dmcommRank);
             if (dmcommRank == 0) {
                 char beforeFilterName[100];
-                snprintf(beforeFilterName, 100, "nuChi0Eigscomm%d_dVs_beforeFiltering.txt", pRPA->nuChi0EigscommIndex);
+                snprintf(beforeFilterName, 100, "nuChi0Eigscomm%d_psis_dVs_beforeFiltering.txt", pRPA->nuChi0EigscommIndex);
                 FILE *outputDVs = fopen(beforeFilterName, "w");
                 if (outputDVs ==  NULL) {
                     printf("error printing deltaVs_beforeFiltering\n");
                     exit(EXIT_FAILURE);
                 } else {
-                    for (int nuChi0EigIndex = 0; nuChi0EigIndex < nuChi0EigsAmount; nuChi0EigIndex++) {
-                        for (int index = 0; index < pSPARC->Nd_d_dmcomm; index++) {
-                            fprintf(outputDVs, "%12.9f\n", pRPA->deltaVs[nuChi0EigIndex*pSPARC->Nd_d_dmcomm + index]);
+                    for (int index = 0; index < pSPARC->Nd_d_dmcomm; index++) {
+                        for (int psiIndex = 0; psiIndex < pSPARC->Nband_bandcomm; psiIndex++) {
+                            fprintf(outputDVs, "%12.9f ", pSPARC->Xorb[psiIndex*pSPARC->Nd_d_dmcomm + index]);
                         }
                         fprintf(outputDVs, "\n");
                     }
+                    fprintf(outputDVs, "\n");
+                    for (int index = 0; index < pSPARC->Nd_d_dmcomm; index++) {
+                        for (int nuChi0EigIndex = 0; nuChi0EigIndex < nuChi0EigsAmount; nuChi0EigIndex++) {
+                            fprintf(outputDVs, "%12.9f ", pRPA->deltaVs[nuChi0EigIndex*pSPARC->Nd_d_dmcomm + index]);
+                        }
+                        fprintf(outputDVs, "\n");
+                    }
+                    fprintf(outputDVs, "\n");
                 }
                 fclose(outputDVs);
             }
