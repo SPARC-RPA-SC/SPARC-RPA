@@ -91,18 +91,16 @@ int distribute_comm_load(int nObjectInTotal, int npObject, int rankFatherComm, i
     else
         *commIndex = -1;
     
-    int nObjectInComm;
-    if (rankFatherComm < (sizeFatherComm - sizeFatherComm % npObject))
-        nObjectInComm = nObjectInTotal / npObject + (int) (*commIndex < (nObjectInTotal % npObject));
-    else
-        nObjectInComm = 0;
+    int nEig, nObjectInComm; // for block cyclic
+    nEig = (nObjectInTotal - 1) / npObject + 1; // this is equal to ceil(Nstates/npband), for int inputs only
+    nObjectInComm = *commIndex < (nObjectInTotal / nEig) ? nEig : (*commIndex == (nObjectInTotal / nEig) ? (nObjectInTotal % nEig) : 0);
 
     if (*commIndex == -1) {
         *objectStartIndex = 0;
-    } else if (*commIndex < (nObjectInTotal % npObject)) {
-        *objectStartIndex = *commIndex * nObjectInComm;
+    } else if (*commIndex <= (nObjectInTotal / nEig)) {
+        *objectStartIndex = *commIndex * nEig;
     } else {
-        *objectStartIndex = *commIndex * nObjectInComm + nObjectInTotal % npObject;
+        *objectStartIndex = nObjectInTotal;
     }
     *objectEndIndex = *objectStartIndex + nObjectInComm - 1;
 

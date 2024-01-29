@@ -35,7 +35,7 @@ void chebyshev_filtering_gamma(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int omegaIndex,
     double *Ys = pRPA->Ys_phi;
     double *Yt = (double*)calloc(sizeof(double), totalLength);
 
-    if (printFlag && (pRPA->nuChi0EigscommIndex == pRPA->npnuChi0Neig - 1)) {
+    if (printFlag) {
         for (int i = 0; i < nuChi0EigsAmount; i++) {
             Transfer_Veff_loc_RPA(pSPARC, pRPA->nuChi0Eigscomm, pRPA->deltaVs_phi + i*pSPARC->Nd_d, pRPA->deltaVs + i * pSPARC->Nd_d_dmcomm);
         }
@@ -85,6 +85,14 @@ void chebyshev_filtering_gamma(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int omegaIndex,
         memcpy(Ys, Yt, sizeof(double)*totalLength);
         sigma = sigmaNew;
     }
+    
+    if (pSPARC->dmcomm_phi != MPI_COMM_NULL) {
+        for (int i = 0; i < pRPA->nNuChi0Eigscomm; i++) {
+            double vec2norm;
+            Vector2Norm(Ys + i*pSPARC->Nd_d, pSPARC->Nd_d, &vec2norm, pSPARC->dmcomm_phi);
+            VectorScale(Ys + i*pSPARC->Nd_d, pSPARC->Nd_d, 1.0/vec2norm, pSPARC->dmcomm_phi); // unify the length of \Delta V
+        }
+    }
 
     if (printFlag) {
         for (int i = 0; i < nuChi0EigsAmount; i++) {
@@ -101,23 +109,15 @@ void chebyshev_filtering_gamma(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int omegaIndex,
                     printf("error printing deltaVs_afterFiltering\n");
                     exit(EXIT_FAILURE);
                 } else {
-                    for (int nuChi0EigIndex = 0; nuChi0EigIndex < nuChi0EigsAmount; nuChi0EigIndex++) {
-                        for (int index = 0; index < pSPARC->Nd_d_dmcomm; index++) {
-                            fprintf(outputYs, "%12.9f\n", pRPA->deltaVs[nuChi0EigIndex*pSPARC->Nd_d_dmcomm + index]);
+                    for (int index = 0; index < pSPARC->Nd_d_dmcomm; index++) {
+                        for (int nuChi0EigIndex = 0; nuChi0EigIndex < nuChi0EigsAmount; nuChi0EigIndex++) {
+                            fprintf(outputYs, "%12.9f ", pRPA->deltaVs[nuChi0EigIndex*pSPARC->Nd_d_dmcomm + index]);
                         }
                         fprintf(outputYs, "\n");
                     }
                 }
                 fclose(outputYs);
             }
-        }
-    }
-    
-    if (pSPARC->dmcomm_phi != MPI_COMM_NULL) {
-        for (int i = 0; i < pRPA->nNuChi0Eigscomm; i++) {
-            double vec2norm;
-            Vector2Norm(Ys + i*pSPARC->Nd_d, pSPARC->Nd_d, &vec2norm, pSPARC->dmcomm_phi);
-            VectorScale(Ys + i*pSPARC->Nd_d, pSPARC->Nd_d, 1.0/vec2norm, pSPARC->dmcomm_phi); // unify the length of \Delta V
         }
     }
     free(Yt);
@@ -506,9 +506,9 @@ void subspace_rotation_unify_eigVecs_gamma(SPARC_OBJ* pSPARC, RPA_OBJ* pRPA, MPI
                     printf("error printing deltaVs_afterCheFSI\n");
                     exit(EXIT_FAILURE);
                 } else {
-                    for (int nuChi0EigIndex = 0; nuChi0EigIndex < nuChi0EigsAmount; nuChi0EigIndex++) {
-                        for (int index = 0; index < pSPARC->Nd_d_dmcomm; index++) {
-                            fprintf(outputYs, "%12.9f\n", pRPA->deltaVs[nuChi0EigIndex*pSPARC->Nd_d_dmcomm + index]);
+                    for (int index = 0; index < pSPARC->Nd_d_dmcomm; index++) {
+                        for (int nuChi0EigIndex = 0; nuChi0EigIndex < nuChi0EigsAmount; nuChi0EigIndex++) {
+                            fprintf(outputYs, "%12.9f ", pRPA->deltaVs[nuChi0EigIndex*pSPARC->Nd_d_dmcomm + index]);
                         }
                         fprintf(outputYs, "\n");
                     }

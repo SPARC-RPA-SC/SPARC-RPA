@@ -229,7 +229,7 @@ void cheFSI_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int omegaIndex) 
     while (flagCheb) {
         t1 = MPI_Wtime();
         if (ncheb) {
-            maxEig = -pRPA->RRnuChi0Eigs[pRPA->nuChi0Neig - 1];
+            maxEig = -pRPA->RRnuChi0Eigs[0] / 8.0;
             lambdaCutoff = pRPA->RRnuChi0Eigs[pRPA->nuChi0Neig - 1] + 1e-4;
         }
         if (pSPARC->isGammaPoint) {
