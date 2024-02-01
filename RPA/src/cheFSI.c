@@ -224,7 +224,7 @@ void cheFSI_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int omegaIndex) 
     int ncheb = 0;
     int signImag = 0;
     int chebyshevDegree = pRPA->ChebDegreeRPA;
-    int printFlag = 0;
+    int printFlag = 1;
     double ErpaTerm = 1000.0, lastErpaTerm = 0.0, t1 = 0.0, t2 = 0.0;
     while (flagCheb) {
         t1 = MPI_Wtime();
@@ -242,11 +242,11 @@ void cheFSI_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int omegaIndex) 
             YT_multiply_Y_gamma(pRPA, pSPARC->dmcomm_phi, pSPARC->Nd_d, pSPARC->Nspinor_eig, printFlag);
             if (!pRPA->eig_useLAPACK) { // if we use ScaLapack, not Lapack, to solve eigenpairs of YT*\nu\Chi0*Y, we have to orthogonalize Y
                 // because ScaLapack does not support solving AX = BX\Lambda with non-symmetric A or B
-                Y_orth_gamma(pRPA, pSPARC->Nd_d, pSPARC->Nspinor_eig);
+                Y_orth_gamma(pSPARC, pRPA, pSPARC->Nd_d, pSPARC->Nspinor_eig, printFlag);
             }
             nuChi0_mult_vectors_gamma(pSPARC, pRPA, omegaIndex, pRPA->Ys_phi, pRPA->deltaVs_phi, pRPA->nNuChi0Eigscomm, flagNoDmcomm); // deltaVs_phi = (\nu\chi0)*Ys_phi for saving memory
             project_YT_nuChi0_Y_gamma(pRPA, pSPARC->dmcomm_phi, pSPARC->Nd_d, pSPARC->Nspinor_eig, printFlag);
-            generalized_eigenproblem_solver_gamma(pRPA, pSPARC->dmcomm_phi, &signImag, printFlag);
+            generalized_eigenproblem_solver_gamma(pRPA, pSPARC->dmcomm_phi, pRPA->nuChi0BlacsComm, 10, &signImag, printFlag); // pSPARC->eig_paral_blksz
             if (signImag > 0) printf("WARNING: omega %d found eigenvalue has large imag part.\n", omegaIndex);
             subspace_rotation_unify_eigVecs_gamma(pSPARC, pRPA, pSPARC->dmcomm_phi, pSPARC->Nd_d, pSPARC->Nspinor_eig,  pRPA->deltaVs_phi, printFlag);
             if (pRPA->npnuChi0Neig > 1) {
@@ -262,11 +262,11 @@ void cheFSI_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int omegaIndex) 
             YT_multiply_Y_kpt(pRPA, pSPARC->dmcomm_phi, pSPARC->Nd_d, pSPARC->Nspinor_eig, printFlag);
             if (!pRPA->eig_useLAPACK) { // if we use ScaLapack, not Lapack, to solve eigenpairs of YT*\nu\Chi0*Y, we have to orthogonalize Y
                 // because ScaLapack does not support solving AX = BX\Lambda with non-symmetric A or B
-                Y_orth_kpt(pRPA, pSPARC->Nd_d, pSPARC->Nspinor_eig);
+                Y_orth_kpt(pSPARC, pRPA, pSPARC->Nd_d, pSPARC->Nspinor_eig, printFlag);
             }
             nuChi0_mult_vectors_kpt(pSPARC, pRPA, qptIndex, omegaIndex, pRPA->Ys_kpt_phi, pRPA->deltaVs_kpt_phi, pRPA->nNuChi0Eigscomm, flagNoDmcomm); // deltaVs_kpt_phi = (\nu\chi0)*Ys_kpt_phi for saving memory
             project_YT_nuChi0_Y_kpt(pRPA, qptIndex, omegaIndex, flagNoDmcomm, pSPARC->dmcomm_phi, pSPARC->Nd_d, pSPARC->Nspinor_eig, pSPARC->isGammaPoint, printFlag);
-            generalized_eigenproblem_solver_kpt(pRPA, pSPARC->dmcomm_phi, &signImag, printFlag);
+            generalized_eigenproblem_solver_kpt(pRPA, pSPARC->dmcomm_phi, pRPA->nuChi0BlacsComm, pSPARC->eig_paral_blksz, &signImag, printFlag);
             if (signImag > 0) printf("WARNING: qpt %d, omega %d found eigenvalue has large imag part.\n", qptIndex, omegaIndex);
             subspace_rotation_unify_eigVecs_kpt(pSPARC, pRPA, pSPARC->dmcomm_phi, pSPARC->Nd_d, pSPARC->Nspinor_eig,  pRPA->deltaVs_phi, printFlag);
             if (pRPA->npnuChi0Neig > 1) {
@@ -298,7 +298,7 @@ void cheFSI_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int omegaIndex) 
             fclose(output_fp);
         }
         ncheb++;
-        // if (ncheb == 4) printFlag = 1;
+        if (ncheb == 1) printFlag = 0;
     }
     pRPA->ErpaTerms[qptIndex*pRPA->Nomega + omegaIndex] = ErpaTerm;
 }

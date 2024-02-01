@@ -255,7 +255,7 @@ void setup_blacsComm_RPA(RPA_OBJ *pRPA, MPI_Comm SPARC_dmcomm_phi, int DMnd, int
     // the maximum Nstates up to which we will use LAPACK to solve
     // the subspace eigenproblem in serial
     // int MAX_NS = 2000;
-    pRPA->eig_useLAPACK = (pRPA->nuChi0Neig <= MAX_NS) ? 1 : 0;
+    pRPA->eig_useLAPACK = (pRPA->nuChi0Neig <= MAX_NS) ? 1 : 0; // just for test, 20
 
     int mbQ, nbQ, lldaQ;
        // block size for storing Hp and Mp
@@ -318,7 +318,8 @@ void setup_blacsComm_RPA(RPA_OBJ *pRPA, MPI_Comm SPARC_dmcomm_phi, int DMnd, int
             char RorC, SorG;
             RorC = (isGammaPoint) ? 'R' : 'C';
             SorG = 'G';
-            pRPA->eig_paral_maxnp = parallel_eigensolver_max_processor(pRPA->nuChi0Neig, RorC, SorG);
+            pRPA->eig_paral_maxnp = parallel_eigensolver_max_processor(pRPA->nuChi0Neig, RorC, SorG); // just for test
+            // pRPA->eig_paral_maxnp = size_blacscomm;
         }
             
         int gridsizes[2] = {pRPA->nuChi0Neig, pRPA->nuChi0Neig}, ierr = 1;
@@ -326,7 +327,7 @@ void setup_blacsComm_RPA(RPA_OBJ *pRPA, MPI_Comm SPARC_dmcomm_phi, int DMnd, int
         if (ierr) pRPA->eig_paral_subdims[0] = pRPA->eig_paral_subdims[1] = 1;
 #ifdef DEBUG
         if ((pRPA->nuChi0EigscommIndex >= 0) && (SPARC_dmcomm_phi != MPI_COMM_NULL)) printf("global rank = %d, Maximun number of processors for RPA eigenvalue solver is %d\n", rankWorld, pRPA->eig_paral_maxnp);
-        if ((pRPA->nuChi0EigscommIndex >= 0) && (SPARC_dmcomm_phi != MPI_COMM_NULL)) printf("global rank = %d, The dimension of subgrid for RPA eigen sovler is (%d x %d).\n", rankWorld,
+        if ((pRPA->nuChi0EigscommIndex >= 0) && (SPARC_dmcomm_phi != MPI_COMM_NULL)) printf("global rank = %d, The dimension of subgrid for RPA eigen solver is (%d x %d).\n", rankWorld,
                                 pRPA->eig_paral_subdims[0], pRPA->eig_paral_subdims[1]);
 #endif
     }

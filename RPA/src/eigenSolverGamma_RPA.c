@@ -22,6 +22,9 @@
 #include "eigenSolverGamma_RPA.h"
 #include "tools_RPA.h"
 
+#define max(x,y) (((x) > (y)) ? (x) : (y))
+#define min(x,y) (((x) > (y)) ? (y) : (x))
+
 void chebyshev_filtering_gamma(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int omegaIndex, double minEig, double maxEig, double lambdaCutoff, int chebyshevDegree, int flagNoDmcomm, int printFlag) {
     double e = (maxEig - lambdaCutoff) / 2.0;
     double c = (lambdaCutoff + maxEig) / 2.0;
@@ -223,7 +226,7 @@ void YT_multiply_Y_gamma(RPA_OBJ* pRPA, MPI_Comm dmcomm_phi, int DMnd, int Nspin
 #endif
 }
 
-void Y_orth_gamma(RPA_OBJ* pRPA, int DMnd, int Nspinor_eig) { // If ScaLapack is selected to solve eigenpairs of YT*\nu\Chi0\Y,
+void Y_orth_gamma(SPARC_OBJ* pSPARC, RPA_OBJ* pRPA, int DMnd, int Nspinor_eig, int printFlag) { // If ScaLapack is selected to solve eigenpairs of YT*\nu\Chi0\Y,
 // then Y should be orthogonalized, since ScaLapack does not support nonsymmetric generalized eigenvalue problems
 // We have to use ScaLapack to solve nonsymmetric eigenvalue problems AX = X\Lambda
     double t1, t2, t3;
@@ -240,6 +243,32 @@ void Y_orth_gamma(RPA_OBJ* pRPA, int DMnd, int Nspinor_eig) { // If ScaLapack is
           pRPA->desc_orb_BLCYC, pRPA->Ys_phi, &ONE, &ONE, 
           pRPA->desc_orbitals, &pRPA->ictxt_blacs);
     t3 = MPI_Wtime();
+    if (printFlag) {
+        for (int i = 0; i < pRPA->nuChi0Neig; i++) {
+            Transfer_Veff_loc_RPA(pSPARC, pRPA->nuChi0Eigscomm, pRPA->Ys_phi + i*pSPARC->Nd_d, pRPA->deltaVs + i * pSPARC->Nd_d_dmcomm);
+        }
+        if ((pSPARC->spincomm_index == 0) && (pSPARC->kptcomm_index == 0) && (pSPARC->bandcomm_index == 0)){
+            int dmcommRank;
+            MPI_Comm_rank(pSPARC->dmcomm, &dmcommRank);
+            if (dmcommRank == 0) {
+                char afterOrthoName[100];
+                snprintf(afterOrthoName, 100, "nuChi0Eigscomm%d_Ys_afterOrtho.txt", pRPA->nuChi0EigscommIndex);
+                FILE *outputYs = fopen(afterOrthoName, "w");
+                if (outputYs ==  NULL) {
+                    printf("error printing deltaVs_afterOrtho\n");
+                    exit(EXIT_FAILURE);
+                } else {
+                    for (int index = 0; index < pSPARC->Nd_d_dmcomm; index++) {
+                        for (int nuChi0EigIndex = 0; nuChi0EigIndex < pRPA->nuChi0Neig; nuChi0EigIndex++) {
+                            fprintf(outputYs, "%12.9f ", pRPA->deltaVs[nuChi0EigIndex*pSPARC->Nd_d_dmcomm + index]);
+                        }
+                        fprintf(outputYs, "\n");
+                    }
+                }
+                fclose(outputYs);
+            }
+        }
+    }
 #ifdef DEBUG
     if(!rankWorld) printf("global rank %d, Orthogonalization of orbitals took: %.3f ms\n", rankWorld, (t2 - t1)*1e3); 
     if(!rankWorld) printf("global rank %d, Updating orbitals took: %.3f ms\n", rankWorld, (t3 - t2)*1e3);
@@ -317,10 +346,17 @@ void project_YT_nuChi0_Y_gamma(RPA_OBJ* pRPA, MPI_Comm dmcomm_phi, int DMnd, int
         int dmcomm_phiRank;
         MPI_Comm_rank(dmcomm_phi, &dmcomm_phiRank);
         if (!dmcomm_phiRank){
-            FILE *Hpfile = fopen("Hp.txt", "w");
+            FILE *Hpfile = fopen("Hp_HpT.txt", "w");
             for (int row = 0; row < pRPA->nr_Hp_BLCYC; row++) {
                 for (int col = 0; col < pRPA->nc_Hp_BLCYC; col++) {
-                    fprintf(Hpfile, "%12.9f ", pRPA->Hp[col*pRPA->nr_Hp_BLCYC + row]);
+                    fprintf(Hpfile, "%12.9f, ", pRPA->Hp[col*pRPA->nr_Hp_BLCYC + row]);
+                }
+                fprintf(Hpfile, "\n");
+            }
+            fprintf(Hpfile, "\n");
+            for (int row = 0; row < pRPA->nr_Hp_BLCYC; row++) {
+                for (int col = 0; col < pRPA->nc_Hp_BLCYC; col++) {
+                    fprintf(Hpfile, "%12.9f, ", pRPA->Hp[row*pRPA->nr_Hp_BLCYC + col]);
                 }
                 fprintf(Hpfile, "\n");
             }
@@ -335,7 +371,7 @@ void project_YT_nuChi0_Y_gamma(RPA_OBJ* pRPA, MPI_Comm dmcomm_phi, int DMnd, int
 }
 
 
-void generalized_eigenproblem_solver_gamma(RPA_OBJ* pRPA, MPI_Comm dmcomm_phi, int *signImag, int printFlag) {
+void generalized_eigenproblem_solver_gamma(RPA_OBJ* pRPA, MPI_Comm dmcomm_phi, MPI_Comm blacsComm, int blksz, int *signImag, int printFlag) {
     if (dmcomm_phi == MPI_COMM_NULL) return;
 // #if defined(USE_MKL) || defined(USE_SCALAPACK)
     int nproc_dmcomm_phi, rankWorld;
@@ -414,14 +450,202 @@ void generalized_eigenproblem_solver_gamma(RPA_OBJ* pRPA, MPI_Comm dmcomm_phi, i
         }
         #endif
     } else { // solve eigenproblem Hp X = X \Lambda, where Hp is non-symmetric
-        // pdgeevx_ // MKL
-        // pcgeevx_
-    }
-    
+        int rank, nproc;
+        MPI_Comm_rank(blacsComm, &rank);
+        MPI_Comm_size(blacsComm, &nproc);
+        int *dims = pRPA->eig_paral_subdims;
+        if (dims[0] * dims[1] > nproc) {
+            if (!rank) printf("ERROR: number of processes in the subgrid (%d, %d) is larger than "
+                              "       total number of processors in the provided communicator.\n", dims[0], dims[1]);
+            exit(EXIT_FAILURE);
+        }
 
+        if (rank == 0) printf("pdgeevx_subcomm_: process grid = (%d, %d)\n", dims[0], dims[1]);
+
+        // generate a (subset) process grid within comm
+        int bhandle = Csys2blacs_handle(blacsComm); // create a context out of rowcomm
+        int ictxt = bhandle, N = pRPA->nuChi0Neig;
+        // create new context with dimensions: dims[0] x dims[1]
+        Cblacs_gridinit(&ictxt, "Row", dims[0], dims[1]);
+
+        // create a global context corresponding to comm
+        int ictxt_old = pRPA->ictxt_blacs;
+
+        if (ictxt >= 0) {
+            int nprow, npcol, myrow, mycol;
+            Cblacs_gridinfo(ictxt, &nprow, &npcol, &myrow, &mycol);
+            // nproc_grid = nprow * npcol;
+
+            // define new BLCYC distribution of A, B and Z
+            int mb, nb, m_loc, n_loc, llda, ZERO = 0, ONE = 1, info2,
+                descA_BLCYC[9], descZ_BLCYC[9];
+
+            mb = nb = blksz;
+            m_loc = numroc_(&N, &mb, &myrow, &ZERO, &nprow);
+            n_loc = numroc_(&N, &nb, &mycol, &ZERO, &npcol);
+            llda = max(1, m_loc);
+            descinit_(descA_BLCYC, &N, &N, &mb, &nb, &ZERO, &ZERO, &ictxt, &llda, &info2);
+            assert(info2 == 0);
+            descinit_(descZ_BLCYC, &N, &N, &mb, &nb, &ZERO, &ZERO, &ictxt, &llda, &info2);
+            assert(info2 == 0);
+
+            double *A_BLCYC  = (double *)calloc(m_loc*n_loc,sizeof(double));
+            double *Z_BLCYC  = (double *)calloc(m_loc*n_loc,sizeof(double));
+            double *alphar = (double *)calloc(N, sizeof(double));
+            double *alphai = (double *)calloc(N, sizeof(double));
+            int *sortedIndex = (int *)malloc(sizeof(int) * pRPA->nuChi0Neig);
+            double *vl = (double *)malloc(sizeof(double) * m_loc*n_loc);
+            double *scale = (double *)calloc(N, sizeof(double));
+            double *rconde = (double *)calloc(N, sizeof(double));
+            assert(A_BLCYC != NULL && Z_BLCYC != NULL && alphar != NULL && alphai != NULL);
+
+            double t1, t2;
+            t1 = MPI_Wtime();
+            // convert A from original distribution to BLCYC in the new context
+            pdgemr2d_(&N, &N, pRPA->Hp, &ONE, &ONE, pRPA->desc_Hp_BLCYC, A_BLCYC, &ONE, &ONE, descA_BLCYC, &ictxt_old);
+            t2 = MPI_Wtime();
+            if (!rank) printf("pdsyevx_subcomm_: A -> A_BLCYC: %.3f ms\n", (t2-t1)*1e3);
+            t1 = MPI_Wtime();
+
+            int ilo = 1, ihi = N; double abnrm; double *rcondv = NULL;
+            automem_pdgeevx_( // balanc can try 'S'
+                "N", "N", "V", "N", 
+                &pRPA->nuChi0Neig, A_BLCYC, descA_BLCYC, alphar, alphai, 
+                vl, &descZ_BLCYC[0], Z_BLCYC, &descZ_BLCYC[0], 
+                &ilo, &ihi, scale, &abnrm, rconde, rcondv, &info2);
+
+            t2 = MPI_Wtime();
+            if (!rank) printf("pdsyevx_subcomm_: AZ=ZD: %.3f ms\n", (t2-t1)*1e3);
+            t1 = MPI_Wtime();
+            // convert Z_BLCYC to given format
+            pdgemr2d_(&N, &N, Z_BLCYC, &ONE, &ONE, descZ_BLCYC, pRPA->Q, &ONE, &ONE, pRPA->desc_Q_BLCYC, &ictxt_old);
+            Sort(alphar, pRPA->nuChi0Neig, pRPA->RRnuChi0Eigs, sortedIndex);
+            printf("global rank %d, the first 3 eigenvalues are %.5E, %.5E, %.5E\n", rankWorld, pRPA->RRnuChi0Eigs[0], pRPA->RRnuChi0Eigs[1], pRPA->RRnuChi0Eigs[2]);
+            t2 = MPI_Wtime();
+            if (!rank) printf("pdsygvx_subcomm: Z_BLCYC -> Z: %.3f ms\n", (t2-t1)*1e3);
+            if (!rank){
+                FILE *eigfile = fopen("eig.txt", "a");
+                for (int col = 0; col < pRPA->nuChi0Neig; col++) {
+                    fprintf(eigfile, "%12.9f ", pRPA->RRnuChi0Eigs[col]);
+                }
+                fprintf(eigfile, "\n");
+                fclose(eigfile);
+            }
+            if (printFlag) {
+                if (!rank){
+                    FILE *eigVecfile = fopen("eigVec_ZBCYCLIC_Q.txt", "w");
+                    for (int row = 0; row < m_loc; row++) {
+                        for (int col = 0; col < n_loc; col++) {
+                            fprintf(eigVecfile, "%12.9f ", Z_BLCYC[col*pRPA->nr_Hp_BLCYC + row]);
+                        }
+                        fprintf(eigVecfile, "\n");
+                    }
+                    fprintf(eigVecfile, "\n");
+                    for (int row = 0; row < pRPA->nr_Q_BLCYC; row++) {
+                        for (int col = 0; col < pRPA->nc_Q_BLCYC; col++) {
+                            fprintf(eigVecfile, "%12.9f ", pRPA->Q[col*pRPA->nr_Hp_BLCYC + row]);
+                        }
+                        fprintf(eigVecfile, "\n");
+                    }
+                    fclose(eigVecfile);
+                }
+            }
+            free(A_BLCYC);
+            free(Z_BLCYC);
+            free(alphar);
+            free(alphai);
+            free(sortedIndex);
+            free(vl);
+            free(scale);
+            free(rconde);
+            Cblacs_gridexit(ictxt);
+        } else {
+            int i, ONE = 1, descA_BLCYC[9], descZ_BLCYC[9];
+            double *A_BLCYC, *Z_BLCYC;
+            A_BLCYC = Z_BLCYC = NULL;
+            for (i = 0; i < 9; i++)
+                descA_BLCYC[i] = descZ_BLCYC[i] = -1;
+
+            pdgemr2d_(&N, &N, pRPA->Hp, &ONE, &ONE, pRPA->desc_Hp_BLCYC, A_BLCYC, &ONE, &ONE, descA_BLCYC, &ictxt_old);
+            pdgemr2d_(&N, &N, Z_BLCYC, &ONE, &ONE, descZ_BLCYC, pRPA->Q, &ONE, &ONE, pRPA->desc_Q_BLCYC, &ictxt_old);
+        }
+    }
+#ifdef DEBUG    
+    double et = MPI_Wtime();
+    if (rankWorld == 0) printf("global rank = %d, generalized_eigenproblem_solver_gamma used %.3lf ms\n", rankWorld, 1000.0 * (et - st));
+#endif
 // #else // #if defined(USE_MKL) || defined(USE_SCALAPACK)
 
 // #endif // #if defined(USE_MKL) || defined(USE_SCALAPACK)
+}
+
+void automem_pdgeevx_( 
+    const char *balanc, const char *jobvl, const char *jobvr, const char *sense, 
+    const int *n, double *a, const int *desca, double *wr, double *wi, 
+    double *vl, const int *descvl, double *vr, const int *descvr, 
+    int *ilo, int *ihi, double *scale, double *abnrm, double *rconde, double *rcondv, int *info)
+{
+#if defined(USE_MKL) || defined(USE_SCALAPACK)
+    int grank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &grank);
+#ifdef DEBUG
+    double t1, t2;
+#endif
+
+	int ictxt = desca[1], nprow, npcol, myrow, mycol;
+	Cblacs_gridinfo(ictxt, &nprow, &npcol, &myrow, &mycol);
+
+	int ZERO = 0, lwork;
+	double *work;
+	lwork = -1;
+	work  = (double *)malloc(100 * sizeof(double));  
+
+	//** first do a workspace query **//
+#ifdef DEBUG    
+    t1 = MPI_Wtime();
+#endif
+	pdgeevx_(balanc, jobvl, jobvr, sense, n, a, desca, wr, wi, 
+     vl, descvl, vr, descvr, 
+     ilo, ihi, scale, abnrm, rconde, rcondv, 
+     work, &lwork, info);
+#ifdef DEBUG
+    t2 = MPI_Wtime();
+    if(!grank) printf("rank = %d, work(1) = %f, time for "
+                        "workspace query: %.3f ms\n", 
+                        grank, work[0], (t2 - t1)*1e3);
+#endif
+
+	int NN, NP0, MQ0, NB, N = *n;
+	lwork = (int) fabs(work[0]);
+	NB = desca[4]; // distribution block size
+	NN = max(max(N, NB),2);
+	NP0 = numroc_( &NN, &NB, &ZERO, &ZERO, &nprow );
+	MQ0 = numroc_( &NN, &NB, &ZERO, &ZERO, &npcol );
+
+	lwork = max(lwork, 5 * N + max(5 * NN, NP0 * MQ0 + 2 * NB * NB) 
+				+ ((N - 1) / (nprow * npcol) + 1) * NN);
+	work = realloc(work, lwork * sizeof(double));
+
+	// call the routine again to perform the calculation
+#ifdef DEBUG
+    t1 = MPI_Wtime();
+#endif
+	pdgeevx_(balanc, jobvl, jobvr, sense, n, a, desca, wr, wi, 
+     vl, descvl, vr, descvr, 
+     ilo, ihi, scale, abnrm, rconde, rcondv, 
+     work, &lwork, info);
+#ifdef DEBUG
+    t2 = MPI_Wtime();
+if(!grank) {
+    printf("rank = %d, info = %d, time for solving standard "
+            "eigenproblem in %d x %d process grid: %.3f ms\n", 
+            grank, *info, nprow, npcol, (t2 - t1)*1e3);
+    printf("rank = %d, after calling pdgeevx, nuChi0Neig = %d\n", grank, *n);
+}
+#endif
+
+	free(work);
+#endif // (USE_MKL or USE_SCALAPACK)	
 }
 
 void subspace_rotation_unify_eigVecs_gamma(SPARC_OBJ* pSPARC, RPA_OBJ* pRPA, MPI_Comm dmcomm_phi, int DMnd, int Nspinor_eig, double *rotatedEigVecs, int printFlag) {

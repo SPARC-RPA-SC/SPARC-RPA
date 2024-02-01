@@ -138,7 +138,7 @@ void YT_multiply_Y_kpt(RPA_OBJ* pRPA, MPI_Comm dmcomm_phi, int DMnd, int Nspinor
 #endif
 }
 
-void Y_orth_kpt(RPA_OBJ* pRPA, int DMnd, int Nspinor_eig) {
+void Y_orth_kpt(SPARC_OBJ* pSPARC, RPA_OBJ* pRPA, int DMnd, int Nspinor_eig, int printFlag) {
 
 }
 
@@ -217,7 +217,7 @@ void project_YT_nuChi0_Y_kpt(RPA_OBJ* pRPA, int qptIndex, int omegaIndex, int fl
 // // #endif // #if defined(USE_MKL) || defined(USE_SCALAPACK)
 }
 
-void generalized_eigenproblem_solver_kpt(RPA_OBJ* pRPA, MPI_Comm dmcomm_phi, int *signImag, int printFlag) {
+void generalized_eigenproblem_solver_kpt(RPA_OBJ* pRPA, MPI_Comm dmcomm_phi, MPI_Comm blacsComm, int blksz, int *signImag, int printFlag) {
 
 }
 
