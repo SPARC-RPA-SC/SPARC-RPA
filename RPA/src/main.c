@@ -28,16 +28,46 @@
  ├──initialize_deltaVs
  ├──test_Hx_nuChi0
  ├──cheFSI_RPA
- |  ├──(if PDEP method is used) find_min_eigenvalue
- |  ├──sternheimer_solver (block_cocg or gmres, in linearSolver.c)
- |  |  ├──(if Gamma point) sternheimer_solver_gamma
- |  |  |  └──Sternheimer_lhs, block_COCG
- |  |  └──(if k-point) sternheimer_solver_kpt
- |  |     └──Sternheimer_lhs_kpt, kpt_solver
- |  ├──collect_transfer_deltaRho
- |  └──Calculate_deltaRhoPotential (in linearSolver.c)
- |        ├──(if Gamma point) Calculate_deltaRhoPotential_gamma
- |        └──(if k-point) Calculate_deltaRhoPotential_kpt
+ |  ├──find_min_eigenvalue
+ |  ├──(if gamma point) chebyshev_filtering_gamma
+ |  |  └──nuChi0_mult_vectors_gamma
+ |  |     ├──Transfer_Veff_loc_RPA
+ |  |     ├──sternheimer_eq_gamma
+ |  |     |  └──sternheimer_eq_gamma
+ |  |     |     └──sternheimer_solver_gamma
+ |  |     |        ├──Sternheimer_lhs
+ |  |     |        ├──set_initial_guess_deltaPsis
+ |  |     |        └──block_COCG
+ |  |     ├──collect_transfer_deltaRho_gamma
+ |  |     |  └──transfer_deltaRho
+ |  |     └──Calculate_deltaRhoPotential_gamma
+ |  |        └──poissonSolver_gamma
+ |  |
+ |  ├──YT_multiply_Y_gamma
+ |  ├──nuChi0_mult_vectors_gamma
+ |  ├──project_YT_nuChi0_Y_gamma
+ |  ├──generalized_eigenproblem_solver_gamma
+ |  ├──subspace_rotation_unify_eigVecs_gamma
+ |  |
+ |  ├──(if k-point) chebyshev_filtering_kpt 
+ |  |  └──nuChi0_mult_vectors_kpt
+ |  |     ├──Transfer_Veff_loc_RPA_kpt
+ |  |     ├──sternheimer_eq_kpt
+ |  |     |  └──sternheimer_eq_kpt
+ |  |     |     └──sternheimer_solver_kpt
+ |  |     |        ├──Sternheimer_lhs_kpt
+ |  |     |        ├──set_initial_guess_deltaPsis_kpt
+ |  |     |        └──solver_kpt
+ |  |     ├──collect_transfer_deltaRho_kpt
+ |  |     |  └──transfer_deltaRho_kpt
+ |  |     └──Calculate_deltaRhoPotential_kpt
+ |  |        └──poissonSolver_kpt
+ |  ├──YT_multiply_Y_kpt
+ |  ├──nuChi0_mult_vectors_kpt
+ |  ├──project_YT_nuChi0_Y_kpt
+ |  ├──generalized_eigenproblem_solver_kpt
+ |  └──subspace_rotation_unify_eigVecs_kpt
+ |
  ├──rpaIntegrationOnOmega
  └──finalization
 */
@@ -88,7 +118,7 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    print_result(&RPA);
+    print_result(&RPA, SPARC.n_atom);
 
     finalize_RPA(&SPARC, &RPA);
 

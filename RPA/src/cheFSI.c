@@ -216,8 +216,8 @@ void cheFSI_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int omegaIndex) 
         minEig = find_min_eigenvalue(pSPARC, pRPA, qptIndex, omegaIndex, flagNoDmcomm);
     }
     MPI_Bcast(&minEig, 1, MPI_DOUBLE, 0, pRPA->nuChi0EigsBridgeComm);
-    double maxEig = -minEig;
-    double lambdaCutoff = -0.01;
+    double maxEig = -minEig * 3.0;
+    double lambdaCutoff = 0.0;
     double qptOmegaWeight = pRPA->qptWts[qptIndex] * pRPA->omegaWts[omegaIndex];
     double tolErpaTermConverge = pRPA->tol_ErpaConverge * qptOmegaWeight;
     int flagCheb = 1;
@@ -229,7 +229,7 @@ void cheFSI_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int omegaIndex) 
     while (flagCheb) {
         t1 = MPI_Wtime();
         if (ncheb) {
-            maxEig = -pRPA->RRnuChi0Eigs[0] / 8.0;
+            maxEig = -pRPA->RRnuChi0Eigs[0] * (2.0/ncheb);
             lambdaCutoff = pRPA->RRnuChi0Eigs[pRPA->nuChi0Neig - 1] + 1e-4;
         }
         if (pSPARC->isGammaPoint) {
@@ -294,7 +294,7 @@ void cheFSI_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int omegaIndex) 
             for (int eigIndex = 0; eigIndex < outputEigAmount; eigIndex++) {
                 fprintf(output_fp, "%.5f ", pRPA->RRnuChi0Eigs[eigIndex]);
             }
-            fprintf(output_fp, " %.5f\n", t2 - t1);
+            fprintf(output_fp, " %.3f\n", t2 - t1);
             fclose(output_fp);
         }
         ncheb++;

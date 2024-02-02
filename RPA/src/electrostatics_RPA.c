@@ -223,7 +223,7 @@ void poissonSolver_gamma(SPARC_OBJ *pSPARC, double *deltaVs_phi, double *rhs, in
         for (int i = 0; i < Nd_d; i++) {
             int_rhs += rhs[nuChi0EigsIndex*Nd_d + i];
         }
-        int_rhs *= pSPARC->dV;
+        // int_rhs *= pSPARC->dV;
         double vt, vsum;
         vt = int_rhs;
         MPI_Allreduce(&vt, &vsum, 1, MPI_DOUBLE, MPI_SUM, pSPARC->dmcomm_phi); 
