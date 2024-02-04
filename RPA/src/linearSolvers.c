@@ -15,8 +15,8 @@
 #include "linearSolvers.h"
 #include "tools_RPA.h"
 
-int block_COCG(void (*lhsfun)(SPARC_OBJ*, int, double, double, double *, double *, double _Complex*, int),
-     SPARC_OBJ* pSPARC, int spn_i, double epsilon, double omega, double *deltaPsisReal, double *deltaPsisImag,
+int block_COCG(void (*lhsfun)(SPARC_OBJ*, int, double *, double, double, double *, double *, double _Complex*, int),
+     SPARC_OBJ* pSPARC, int spn_i, double *psi, double epsilon, double omega, double *deltaPsisReal, double *deltaPsisImag,
      double _Complex *SternheimerRhs, int nuChi0EigsAmounts, double tol, int maxIter, double *resNormRecords) {
     
     int DMnd = pSPARC->Nd_d_dmcomm;
@@ -29,7 +29,7 @@ int block_COCG(void (*lhsfun)(SPARC_OBJ*, int, double, double, double *, double 
 
     double _Complex *LHSx = (double _Complex*)calloc(sizeof(double _Complex), DMnd*nuChi0EigsAmounts);
     double _Complex *V = (double _Complex*)calloc(sizeof(double _Complex), DMnd*nuChi0EigsAmounts);
-    lhsfun(pSPARC, spn_i, epsilon, omega, deltaPsisReal, deltaPsisImag, LHSx, nuChi0EigsAmounts);
+    lhsfun(pSPARC, spn_i, psi, epsilon, omega, deltaPsisReal, deltaPsisImag, LHSx, nuChi0EigsAmounts);
     for (int rhsIndex = 0; rhsIndex < rhsLength; rhsIndex++) {
         V[rhsIndex] = SternheimerRhs[rhsIndex] - LHSx[rhsIndex];
     }
@@ -71,7 +71,7 @@ int block_COCG(void (*lhsfun)(SPARC_OBJ*, int, double, double, double *, double 
             P[i] = W[i] + midVariable[i]; // P = W + P*beta;
         }
         divide_complex_vectors(P, dividedReal, dividedImag, rhsLength);
-        lhsfun(pSPARC, spn_i, epsilon, omega, dividedReal, dividedImag, U, nuChi0EigsAmounts); // U = Afun(P);
+        lhsfun(pSPARC, spn_i, psi, epsilon, omega, dividedReal, dividedImag, U, nuChi0EigsAmounts); // U = Afun(P);
         cblas_zgemm(CblasColMajor, CblasTrans, CblasNoTrans, nuChi0EigsAmounts, nuChi0EigsAmounts, DMnd,
                   &Nalpha, U, DMnd,
                   P, DMnd, &Nbeta,

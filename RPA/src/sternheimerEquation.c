@@ -143,7 +143,7 @@ void sternheimer_eq_kpt(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int omeg
 
 double sternheimer_solver_gamma(SPARC_OBJ *pSPARC, int spn_i, double epsilon, double omega, double *deltaPsisReal, double *deltaPsisImag, double *deltaVs, double *psi, double bandWeight, double *deltaRhos, int nuChi0EigsAmounts)
 {
-    void (*lhsfun)(SPARC_OBJ *, int, double, double, double *, double *, double _Complex *, int) = Sternheimer_lhs;
+    void (*lhsfun)(SPARC_OBJ *, int, double *, double, double, double *, double *, double _Complex *, int) = Sternheimer_lhs;
     int DMnd = pSPARC->Nd_d_dmcomm;
     double sqrtdV = sqrt(pSPARC->dV);
     double _Complex *SternheimerRhs = (double _Complex *)calloc(sizeof(double _Complex), DMnd*nuChi0EigsAmounts);
@@ -153,13 +153,21 @@ double sternheimer_solver_gamma(SPARC_OBJ *pSPARC, int spn_i, double epsilon, do
             deltaPsisReal[nuChi0EigsIndex*DMnd + i] = 0.0;
             deltaPsisImag[nuChi0EigsIndex*DMnd + i] = 0.0;
         }
+        // linear operator P, only contains the term of psi to be computed, occ2 = occ
+        double _Complex dotProdPsiDeltaVPsi = 0.0;
+        for (int i = 0; i < DMnd; i++) {
+            dotProdPsiDeltaVPsi += -(psi[i])*SternheimerRhs[nuChi0EigsIndex*DMnd + i]; // don't add (psi[i]/sqrtdV)!
+        }
+        for (int i = 0; i < DMnd; i++) {
+            SternheimerRhs[nuChi0EigsIndex*DMnd + i] += (psi[i])*dotProdPsiDeltaVPsi;
+        }
     }
 
     set_initial_guess_deltaPsis(pSPARC, spn_i, epsilon, omega, SternheimerRhs, deltaPsisReal, deltaPsisImag);
 
-    int maxIter = 1000;
-    double *resNormRecords = (double *)calloc(sizeof(double), maxIter * nuChi0EigsAmounts); // 1000 is maximum iteration time
-    int iterTime = block_COCG(lhsfun, pSPARC, spn_i, epsilon, omega, deltaPsisReal, deltaPsisImag, SternheimerRhs, nuChi0EigsAmounts, 1e-8, maxIter, resNormRecords);
+    int maxIter = 100;
+    double *resNormRecords = (double *)calloc(sizeof(double), (maxIter + 1) * nuChi0EigsAmounts); // 1000 is maximum iteration time
+    int iterTime = block_COCG(lhsfun, pSPARC, spn_i, psi, epsilon, omega, deltaPsisReal, deltaPsisImag, SternheimerRhs, nuChi0EigsAmounts, 1e-8, maxIter, resNormRecords);
 
     for (int nuChi0EigsIndex = 0; nuChi0EigsIndex < nuChi0EigsAmounts; nuChi0EigsIndex++) {
         for (int i = 0; i < DMnd; i++) { // bandWeight includes occupation and spin factor
@@ -169,7 +177,7 @@ double sternheimer_solver_gamma(SPARC_OBJ *pSPARC, int spn_i, double epsilon, do
 
     double _Complex *residual = (double _Complex *)calloc(sizeof(double _Complex), DMnd * nuChi0EigsAmounts);
     double residualNorm = 0.0;
-    Sternheimer_lhs(pSPARC, spn_i, epsilon, omega, deltaPsisReal, deltaPsisImag, residual, nuChi0EigsAmounts);
+    Sternheimer_lhs(pSPARC, spn_i, psi, epsilon, omega, deltaPsisReal, deltaPsisImag, residual, nuChi0EigsAmounts);
     for (int i = 0; i < nuChi0EigsAmounts*DMnd; i++) { // the sum of square of residual norms of all Sternheimer eq.s of the \psi
         residual[i] -= SternheimerRhs[i];
         residualNorm += conj(residual[i]) * residual[i];
@@ -180,9 +188,10 @@ double sternheimer_solver_gamma(SPARC_OBJ *pSPARC, int spn_i, double epsilon, do
     return residualNorm;
 }
 
-void Sternheimer_lhs(SPARC_OBJ *pSPARC, int spn_i, double epsilon, double omega, double *Xreal, double *Ximag, double _Complex *lhsX, int nuChi0EigsAmounts)
+void Sternheimer_lhs(SPARC_OBJ *pSPARC, int spn_i, double *psi, double epsilon, double omega, double *Xreal, double *Ximag, double _Complex *lhsX, int nuChi0EigsAmounts)
 {
     int sg = pSPARC->spin_start_indx + spn_i;
+    double dV = pSPARC->dV;
     int DMnd = pSPARC->Nd_d_dmcomm;
     // int DMndsp = DMnd * pSPARC->Nspinor_spincomm;
     for (int i = 0; i < DMnd * nuChi0EigsAmounts; i++) {
@@ -200,6 +209,17 @@ void Sternheimer_lhs(SPARC_OBJ *pSPARC, int spn_i, double epsilon, double omega,
         pSPARC->Atom_Influence_nloc, pSPARC->nlocProj, nuChi0EigsAmounts, -epsilon, Ximag, DMnd, lhsXreal_Xcomp, DMnd, spn_i, pSPARC->dmcomm); // reminder: ldi and ldo should not be DMndsp!
     for (int i = 0; i < DMnd * nuChi0EigsAmounts; i++) {// sternheimer eq.s for all \Delta Vs are solved together
         lhsX[i] += lhsXreal_Xcomp[i] * I + omega*Ximag[i];
+    }
+    // linear operator Q, only contains the term of psi to be computed, occ2 = occ
+    for (int nuChi0EigsIndex = 0; nuChi0EigsIndex < nuChi0EigsAmounts; nuChi0EigsIndex++) {
+        double dotProdPsiXreal = 0.0, dotProdPsiXimag = 0.0;
+        for (int i = 0; i < DMnd; i++) {
+            dotProdPsiXreal += psi[i]*Xreal[nuChi0EigsIndex*DMnd + i];
+            dotProdPsiXimag += psi[i]*Ximag[nuChi0EigsIndex*DMnd + i];
+        }
+        for (int i = 0; i < DMnd; i++) {
+            lhsX[nuChi0EigsIndex*DMnd + i] += psi[i] * (dotProdPsiXreal + dotProdPsiXimag * I) / dV;
+        }
     }
     free(lhsXreal_Xcomp);
 }
