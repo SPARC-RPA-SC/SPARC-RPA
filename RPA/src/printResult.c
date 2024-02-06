@@ -20,6 +20,7 @@ void print_result(RPA_OBJ *pRPA, int nAtoms) {
                 double ErpaTerm = pRPA->ErpaTerms[qptIndex*pRPA->Nomega + omegaIndex];
                 fprintf(output_fp,"omega %d: %.5E, ", omegaIndex, ErpaTerm);
                 Erpa += ErpaTerm;
+                if (omegaIndex % 3 == 2) fprintf(output_fp,"\n");
             }
             fprintf(output_fp,"\n");
         }

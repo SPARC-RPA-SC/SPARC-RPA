@@ -20,5 +20,11 @@ void automem_pdgeevx_(
     double *vl, const int *descvl, double *vr, const int *descvr, 
     int *ilo, int *ihi, double *scale, double *abnrm, double *rconde, double *rcondv, int *info);
 
+void automem_pzgeevx_( 
+    const char *balanc, const char *jobvl, const char *jobvr, const char *sense, 
+    const int *n, double _Complex *a, const int *desca, double _Complex *w, 
+    double _Complex *vl, const int *descvl, double _Complex *vr, const int *descvr, 
+    int *ilo, int *ihi, double *scale, double *abnrm, double *rconde, double *rcondv, int *info);
+
 void subspace_rotation_unify_eigVecs_gamma(SPARC_OBJ* pSPARC, RPA_OBJ* pRPA, MPI_Comm dmcomm_phi, int DMnd, int Nspinor_eig, double *rotatedEigVecs, int printFlag);
 #endif

@@ -491,29 +491,45 @@ void generalized_eigenproblem_solver_gamma(RPA_OBJ* pRPA, MPI_Comm dmcomm_phi, M
 
             double *A_BLCYC  = (double *)calloc(m_loc*n_loc,sizeof(double));
             double *Z_BLCYC  = (double *)calloc(m_loc*n_loc,sizeof(double));
+            double _Complex *A_BLCYC_comp  = (double _Complex*)calloc(m_loc*n_loc,sizeof(double _Complex));
+            double _Complex *Z_BLCYC_comp  = (double _Complex*)calloc(m_loc*n_loc,sizeof(double _Complex));
             double *alphar = (double *)calloc(N, sizeof(double));
-            double *alphai = (double *)calloc(N, sizeof(double));
+            // double *alphai = (double *)calloc(N, sizeof(double));
+            double _Complex *alpha = (double _Complex*)calloc(N, sizeof(double _Complex));
             int *sortedIndex = (int *)malloc(sizeof(int) * pRPA->nuChi0Neig);
-            double *vl = (double *)malloc(sizeof(double) * m_loc*n_loc);
+            // double *vl = (double *)malloc(sizeof(double) * m_loc*n_loc);
+            double _Complex *vl = (double _Complex*)malloc(sizeof(double _Complex) * m_loc*n_loc);
             double *scale = (double *)calloc(N, sizeof(double));
             double *rconde = (double *)calloc(N, sizeof(double));
-            assert(A_BLCYC != NULL && Z_BLCYC != NULL && alphar != NULL && alphai != NULL);
+            assert(A_BLCYC != NULL && Z_BLCYC != NULL && alpha != NULL);
 
             double t1, t2;
             t1 = MPI_Wtime();
             // convert A from original distribution to BLCYC in the new context
             pdgemr2d_(&N, &N, pRPA->Hp, &ONE, &ONE, pRPA->desc_Hp_BLCYC, A_BLCYC, &ONE, &ONE, descA_BLCYC, &ictxt_old);
+            for (int i = 0; i < m_loc*n_loc; i++) 
+                A_BLCYC_comp[i] = A_BLCYC[i];
             t2 = MPI_Wtime();
             if (!rank) printf("pdsyevx_subcomm_: A -> A_BLCYC: %.3f ms\n", (t2-t1)*1e3);
             t1 = MPI_Wtime();
 
             int ilo = 1, ihi = N; double abnrm; double *rcondv = NULL;
-            automem_pdgeevx_( // balanc can try 'S'
+            // automem_pdgeevx_( // balanc can try 'S'
+            //     "N", "N", "V", "N", 
+            //     &pRPA->nuChi0Neig, A_BLCYC, descA_BLCYC, alphar, alphai, 
+            //     vl, &descZ_BLCYC[0], Z_BLCYC, &descZ_BLCYC[0], 
+            //     &ilo, &ihi, scale, &abnrm, rconde, rcondv, &info2);
+            // MKL pdgeevx_ function has bugs ("-nan" eigenvectors), use MKL pzgeevx_ function to replace
+            automem_pzgeevx_( // balanc can try 'S'
                 "N", "N", "V", "N", 
-                &pRPA->nuChi0Neig, A_BLCYC, descA_BLCYC, alphar, alphai, 
-                vl, &descZ_BLCYC[0], Z_BLCYC, &descZ_BLCYC[0], 
+                &pRPA->nuChi0Neig, A_BLCYC_comp, descA_BLCYC, alpha,
+                vl, &descZ_BLCYC[0], Z_BLCYC_comp, &descZ_BLCYC[0], 
                 &ilo, &ihi, scale, &abnrm, rconde, rcondv, &info2);
 
+            for (int i = 0; i < m_loc*n_loc; i++) 
+                Z_BLCYC[i] = creal(Z_BLCYC_comp[i]);
+            for (int i = 0; i < N; i++)
+                alphar[i] = creal(alpha[i]);
             t2 = MPI_Wtime();
             if (!rank) printf("pdsyevx_subcomm_: AZ=ZD: %.3f ms\n", (t2-t1)*1e3);
             t1 = MPI_Wtime();
@@ -552,8 +568,11 @@ void generalized_eigenproblem_solver_gamma(RPA_OBJ* pRPA, MPI_Comm dmcomm_phi, M
             }
             free(A_BLCYC);
             free(Z_BLCYC);
+            free(A_BLCYC_comp);
+            free(Z_BLCYC_comp);
             free(alphar);
-            free(alphai);
+            // free(alphai);
+            free(alpha);
             free(sortedIndex);
             free(vl);
             free(scale);
@@ -631,6 +650,75 @@ void automem_pdgeevx_(
     t1 = MPI_Wtime();
 #endif
 	pdgeevx_(balanc, jobvl, jobvr, sense, n, a, desca, wr, wi, 
+     vl, descvl, vr, descvr, 
+     ilo, ihi, scale, abnrm, rconde, rcondv, 
+     work, &lwork, info);
+#ifdef DEBUG
+    t2 = MPI_Wtime();
+if(!grank) {
+    printf("rank = %d, info = %d, time for solving standard "
+            "eigenproblem in %d x %d process grid: %.3f ms\n", 
+            grank, *info, nprow, npcol, (t2 - t1)*1e3);
+    printf("rank = %d, after calling pdgeevx, nuChi0Neig = %d\n", grank, *n);
+}
+#endif
+
+	free(work);
+#endif // (USE_MKL or USE_SCALAPACK)	
+}
+
+void automem_pzgeevx_( 
+    const char *balanc, const char *jobvl, const char *jobvr, const char *sense, 
+    const int *n, double _Complex *a, const int *desca, double _Complex *w, 
+    double _Complex *vl, const int *descvl, double _Complex *vr, const int *descvr, 
+    int *ilo, int *ihi, double *scale, double *abnrm, double *rconde, double *rcondv, int *info)
+{
+#if defined(USE_MKL) || defined(USE_SCALAPACK)
+    int grank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &grank);
+#ifdef DEBUG
+    double t1, t2;
+#endif
+
+	int ictxt = desca[1], nprow, npcol, myrow, mycol;
+	Cblacs_gridinfo(ictxt, &nprow, &npcol, &myrow, &mycol);
+
+	int ZERO = 0, lwork;
+	double _Complex *work;
+	lwork = -1;
+	work  = (double _Complex*)malloc(100 * sizeof(double _Complex));  
+
+	//** first do a workspace query **//
+#ifdef DEBUG    
+    t1 = MPI_Wtime();
+#endif
+	pzgeevx_(balanc, jobvl, jobvr, sense, n, a, desca, w, 
+     vl, descvl, vr, descvr, 
+     ilo, ihi, scale, abnrm, rconde, rcondv, 
+     work, &lwork, info);
+#ifdef DEBUG
+    t2 = MPI_Wtime();
+    if(!grank) printf("rank = %d, work(1) = %f, time for "
+                        "workspace query: %.3f ms\n", 
+                        grank, creal(work[0]), (t2 - t1)*1e3);
+#endif
+
+	int NN, NP0, MQ0, NB, N = *n;
+	lwork = (int) fabs(work[0]);
+	NB = desca[4]; // distribution block size
+	NN = max(max(N, NB),2);
+	NP0 = numroc_( &NN, &NB, &ZERO, &ZERO, &nprow );
+	MQ0 = numroc_( &NN, &NB, &ZERO, &ZERO, &npcol );
+
+	lwork = max(lwork, 5 * N + max(5 * NN, NP0 * MQ0 + 2 * NB * NB) 
+				+ ((N - 1) / (nprow * npcol) + 1) * NN);
+	work = realloc(work, lwork * sizeof(double _Complex));
+
+	// call the routine again to perform the calculation
+#ifdef DEBUG
+    t1 = MPI_Wtime();
+#endif
+	pzgeevx_(balanc, jobvl, jobvr, sense, n, a, desca, w, 
      vl, descvl, vr, descvr, 
      ilo, ihi, scale, abnrm, rconde, rcondv, 
      work, &lwork, info);

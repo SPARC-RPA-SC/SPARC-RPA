@@ -28,6 +28,7 @@ void sternheimer_eq_gamma(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int omegaIndex, int 
     }
     for (int spn_i = 0; spn_i < pSPARC->Nspin_spincomm; spn_i++) {
         for (int bandIndex = 0; bandIndex < ncol; bandIndex++) {
+            if (pSPARC->occ[spn_i * ncol + bandIndex] < 1e-8) continue;
             double epsilon = pSPARC->lambda[spn_i * ncol + bandIndex];
             double *psi = pSPARC->Xorb + bandIndex * DMndsp + spn_i * pSPARC->Nd_d_dmcomm;
             double bandWeight = pSPARC->occfac * pSPARC->occ[spn_i * ncol + bandIndex]; // occfac contains spin factor
