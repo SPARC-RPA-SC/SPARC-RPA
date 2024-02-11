@@ -101,6 +101,12 @@ typedef struct _RPA_OBJ {
     int **kPqSymList;
     int **kPqList;
     int **kMqList;
+    // variables recording nearby bands for composing P and Q
+    int *nearbyBandIndicesGamma;
+    int neighborBandStartEnd[2];
+    int *neighborBandIndicesGamma;
+    double *neighborBandsGamma;
+    double *allEpsilonsGamma;
     // save \Delta V s, \Delta\psi and \Delta\rho s
     double *deltaVs_phi; // in dmcomm_phi, save deltaVs; length is pSPARC->Nd_d * nNuChi0Eigscomm
     double _Complex *deltaVs_kpt_phi; // in dmcomm_phi, save deltaVs; length is pSPARC->Nd_d * nNuChi0Eigscomm

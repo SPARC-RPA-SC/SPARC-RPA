@@ -80,6 +80,7 @@
 #include "main.h"
 #include "initialization_RPA.h"
 #include "restoreElectronicGroundState.h"
+#include "prepare_PQ_operators.h"
 #include "cheFSI.h"
 #include "printResult.h"
 #include "finalization_RPA.h"
@@ -104,6 +105,8 @@ int main(int argc, char *argv[]) {
     initialize_RPA(&SPARC, &RPA, argc, argv);
 
     restore_electronicGroundState(&SPARC, RPA.nuChi0Eigscomm, RPA.nuChi0EigsBridgeComm, RPA.nuChi0EigscommIndex, RPA.rank0nuChi0EigscommInWorld, RPA.k1, RPA.k2, RPA.k3, RPA.kPqSymList, RPA.Nkpts_sym);
+
+    prepare_PQ_operators(&SPARC, &RPA);
 
     initialize_deltaVs(&SPARC, &RPA);
 

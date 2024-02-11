@@ -62,6 +62,10 @@ void finalize_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA) {
         int flagNoDmcomm = (pSPARC->spincomm_index < 0 || pSPARC->kptcomm_index < 0 || pSPARC->bandcomm_index < 0 || pSPARC->dmcomm == MPI_COMM_NULL);
         if (!flagNoDmcomm) {
             if (pSPARC->isGammaPoint) {
+                free(pRPA->nearbyBandIndicesGamma);
+                free(pRPA->neighborBandIndicesGamma); // free NULL pointer is fine
+                free(pRPA->neighborBandsGamma);
+                free(pRPA->allEpsilonsGamma);
                 free(pRPA->deltaRhos);
                 free(pRPA->deltaVs);
                 free(pRPA->deltaPsisReal);

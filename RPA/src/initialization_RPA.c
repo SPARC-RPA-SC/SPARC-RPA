@@ -143,6 +143,10 @@ void initialize_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int argc, char* argv[]) {
     int flagNoDmcomm = (pSPARC->spincomm_index < 0 || pSPARC->kptcomm_index < 0 || pSPARC->bandcomm_index < 0 || pSPARC->dmcomm == MPI_COMM_NULL);
     if (!flagNoDmcomm) {
         if (pSPARC->isGammaPoint) {
+            pRPA->nearbyBandIndicesGamma = (int*)calloc(sizeof(int), pSPARC->Nspin_spincomm * 2 * pSPARC->Nband_bandcomm);
+            pRPA->neighborBandIndicesGamma = NULL;
+            pRPA->neighborBandsGamma = NULL;
+            pRPA->allEpsilonsGamma = (double*)calloc(sizeof(double), pSPARC->Nspin_spincomm * pSPARC->Nstates);
             pRPA->deltaRhos = (double*)calloc(sizeof(double), pSPARC->Nd_d_dmcomm * pRPA->nNuChi0Eigscomm);
             pRPA->deltaVs = (double*)calloc(sizeof(double), pSPARC->Nd_d_dmcomm * pRPA->nNuChi0Eigscomm);
             pRPA->deltaPsisReal = (double*)calloc(sizeof(double), pSPARC->Nd_d_dmcomm * pRPA->nNuChi0Eigscomm);

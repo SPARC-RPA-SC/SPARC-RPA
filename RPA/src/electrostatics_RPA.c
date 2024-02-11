@@ -239,16 +239,15 @@ void poissonSolver_gamma(SPARC_OBJ *pSPARC, double *deltaVs_phi, double *rhs, in
         // solve -Laplacian phi = 4 * M_PI * (rho + b) 
         // TODO: use real preconditioner instead of Jacobi preconditioner!
         if(pSPARC->POISSON_SOLVER == 0) {
-            double omega, beta;
-            int m, p;
-            omega = 0.6, beta = 0.6; //omega = 0.6, beta = 0.6;
-            m = 7, p = 6; //m = 9, p = 8; //m = 9, p = 9;
-            AAR(pSPARC, residule_fptr, Jacobi_fptr, 0.0, Nd_d, deltaVs_phi + nuChi0EigsIndex*Nd_d, rhs + nuChi0EigsIndex*Nd_d, 
-            omega, beta, m, p, pSPARC->TOL_POISSON, pSPARC->MAXIT_POISSON, pSPARC->dmcomm_phi);
-        } else {
-            if (rank == 0) printf("Please provide a valid poisson solver!\n");
-            exit(EXIT_FAILURE);
-            // CG(pSPARC, Lap_vec_mult, pSPARC->Nd, Nd_d, pSPARC->elecstPotential, rhs, pSPARC->TOL_POISSON, pSPARC->MAXIT_POISSON, pSPARC->dmcomm_phi);
+            // double omega, beta;
+            // int m, p;
+            // omega = 0.6, beta = 0.6; //omega = 0.6, beta = 0.6;
+            // m = 7, p = 6; //m = 9, p = 8; //m = 9, p = 9;
+            // AAR(pSPARC, residule_fptr, Jacobi_fptr, 0.0, Nd_d, deltaVs_phi + nuChi0EigsIndex*Nd_d, rhs + nuChi0EigsIndex*Nd_d, 
+            // omega, beta, m, p, pSPARC->TOL_POISSON, pSPARC->MAXIT_POISSON, pSPARC->dmcomm_phi);
+
+            void (*Ax)(const SPARC_OBJ *, const int, const int *, const int, const double, double *, const int, double *, const int, MPI_Comm) = Lap_vec_mult;
+            CG(pSPARC, Ax, Nd_d, pSPARC->DMVertices, deltaVs_phi + nuChi0EigsIndex*Nd_d, rhs + nuChi0EigsIndex*Nd_d, pSPARC->TOL_POISSON, pSPARC->MAXIT_POISSON, pSPARC->dmcomm_phi);
         }
 
     #ifdef DEBUG
