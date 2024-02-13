@@ -30,7 +30,7 @@
 #include "parallelization_SPARC.h"
 #include "generateKgrid.h"
 
-#define N_MEMBR_RPA 21
+#define N_MEMBR_RPA 18
 
 void initialize_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int argc, char* argv[]) {
     int rank;
@@ -101,13 +101,13 @@ void initialize_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int argc, char* argv[]) {
     pRPA->ErpaTerms = (double *)malloc(pRPA->Nqpts_sym * pRPA->Nomega * sizeof(double));
     // for structure RPA, allocating space for delta orbitals, delta density, delta \nu\chi\Delta V...
     // printf("%s\n", pRPA->filename_out);
-    Setup_Comms_RPA(pRPA, pSPARC->Nspin, pSPARC->Nkpts, pSPARC->Nstates); // set communicator for RPA calculation
+    Setup_Comms_RPA(pRPA, pSPARC->Nspin, pSPARC->Nkpts, pSPARC->Nstates, pSPARC->Nd); // set communicator for RPA calculation
     pSPARC->npspin = pRPA->npspin;
     pSPARC->npkpt = pRPA->npkpt;
     pSPARC->npband = pRPA->npband;
-    pSPARC->npNdx = pRPA->npNdx;
-    pSPARC->npNdy = pRPA->npNdy;
-    pSPARC->npNdz = pRPA->npNdz;
+    pSPARC->npNdx = 1; // currently there is no domain parallelization
+    pSPARC->npNdy = 1;
+    pSPARC->npNdz = 1;
     pSPARC->npNdx_phi = pRPA->npNdx_phi;
     pSPARC->npNdy_phi = pRPA->npNdy_phi;
     pSPARC->npNdz_phi = pRPA->npNdz_phi;
@@ -115,9 +115,6 @@ void initialize_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int argc, char* argv[]) {
     pRPA->npspin = pSPARC->npspin;
     pRPA->npkpt = pSPARC->npkpt;
     pRPA->npband = pSPARC->npband;
-    pRPA->npNdx = pSPARC->npNdx;
-    pRPA->npNdy = pSPARC->npNdy;
-    pRPA->npNdz = pSPARC->npNdz;
     pRPA->npNdx_phi = pSPARC->npNdx_phi;
     pRPA->npNdy_phi = pSPARC->npNdy_phi;
     pRPA->npNdz_phi = pSPARC->npNdz_phi;
@@ -163,13 +160,13 @@ void RPA_Input_MPI_create(MPI_Datatype *RPA_INPUT_MPI) {
     RPA_INPUT_OBJ rpa_input_tmp;
     MPI_Datatype RPA_TYPES[N_MEMBR_RPA] =   {MPI_INT, MPI_INT, MPI_INT, MPI_INT, MPI_INT,
                                     MPI_INT, MPI_INT, MPI_INT, MPI_INT, MPI_INT,
-                                    MPI_INT, MPI_INT, MPI_INT, MPI_INT, 
+                                    MPI_INT,
                                     MPI_DOUBLE, 
                                     MPI_CHAR, MPI_CHAR, MPI_CHAR, MPI_CHAR, MPI_CHAR,
                                     MPI_CHAR};
     int blens[N_MEMBR_RPA] = {1, 1, 1, 1, 1,
                      1, 1, 1, 1, 1,
-                     1, 1, 1, 1,
+                     1,
                      1,
                      L_STRING, L_STRING, L_STRING, L_STRING, L_STRING,
                      L_STRING};
@@ -182,9 +179,6 @@ void RPA_Input_MPI_create(MPI_Datatype *RPA_INPUT_MPI) {
     MPI_Get_address(&rpa_input_tmp.npspin, addr + i++);
     MPI_Get_address(&rpa_input_tmp.npkpt, addr + i++);
     MPI_Get_address(&rpa_input_tmp.npband, addr + i++);
-    MPI_Get_address(&rpa_input_tmp.npNdx, addr + i++);
-    MPI_Get_address(&rpa_input_tmp.npNdy, addr + i++);
-    MPI_Get_address(&rpa_input_tmp.npNdz, addr + i++);
     MPI_Get_address(&rpa_input_tmp.npNdx_phi, addr + i++);
     MPI_Get_address(&rpa_input_tmp.npNdy_phi, addr + i++);
     MPI_Get_address(&rpa_input_tmp.npNdz_phi, addr + i++);
@@ -214,9 +208,6 @@ void set_RPA_defaults(RPA_INPUT_OBJ *pRPA_Input, int Nstates, int Nd) {
     pRPA_Input->npspin = 0;
     pRPA_Input->npkpt = 0;
     pRPA_Input->npband = 0;
-    pRPA_Input->npNdx = 0;
-    pRPA_Input->npNdy = 0;
-    pRPA_Input->npNdz = 0;
     pRPA_Input->npNdx_phi = 0;
     pRPA_Input->npNdy_phi = 0;
     pRPA_Input->npNdz_phi = 0;
@@ -265,11 +256,6 @@ void read_RPA_inputs(RPA_INPUT_OBJ *pRPA_Input) {
             fscanf(input_fp, "%*[^\n]\n");
         } else if (strcmpi(str,"NP_BAND_PARAL_RPA:") == 0) {
             fscanf(input_fp,"%d", &pRPA_Input->npband);
-            fscanf(input_fp, "%*[^\n]\n");
-        } else if (strcmpi(str,"NP_DOMAIN_PARAL_RPA:") == 0) {
-            fscanf(input_fp,"%d", &pRPA_Input->npNdx);
-            fscanf(input_fp,"%d", &pRPA_Input->npNdy);
-            fscanf(input_fp,"%d", &pRPA_Input->npNdz);
             fscanf(input_fp, "%*[^\n]\n");
         } else if (strcmpi(str,"NP_DOMAIN_PHI_PARAL_RPA:") == 0) {
             fscanf(input_fp,"%d", &pRPA_Input->npNdx_phi);
@@ -336,9 +322,6 @@ void RPA_copy_inputs(RPA_OBJ *pRPA, RPA_INPUT_OBJ *pRPA_Input) {
     pRPA->npspin = pRPA_Input->npspin;
     pRPA->npkpt = pRPA_Input->npkpt;
     pRPA->npband = pRPA_Input->npband;
-    pRPA->npNdx = pRPA_Input->npNdx;
-    pRPA->npNdy = pRPA_Input->npNdy;
-    pRPA->npNdz = pRPA_Input->npNdz;
     pRPA->npNdx_phi = pRPA_Input->npNdx_phi;
     pRPA->npNdy_phi = pRPA_Input->npNdy_phi;
     pRPA->npNdz_phi = pRPA_Input->npNdz_phi;
@@ -424,7 +407,6 @@ void write_settings(RPA_OBJ *pRPA) {
     fprintf(output_fp,"NP_SPIN_PARAL_RPA: %d\n",pRPA->npspin);
     fprintf(output_fp,"NP_KPOINT_PARAL_RPA: %d\n",pRPA->npkpt);
     fprintf(output_fp,"NP_BAND_PARAL_RPA: %d\n",pRPA->npband);
-    fprintf(output_fp,"NP_DOMAIN_PARAL_RPA: %d %d %d\n",pRPA->npNdx,pRPA->npNdy,pRPA->npNdz);
     fprintf(output_fp,"NP_DOMAIN_PHI_PARAL_RPA: %d %d %d\n",pRPA->npNdx_phi,pRPA->npNdy_phi,pRPA->npNdz_phi);
     fclose(output_fp);
 }

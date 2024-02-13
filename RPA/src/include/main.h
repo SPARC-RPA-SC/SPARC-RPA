@@ -60,9 +60,6 @@ typedef struct _RPA_OBJ {
     int npspin;         // number of spin communicators
     int npkpt;          // number of processes for paral. over k-points
     int npband;         // number of processes for paral. over bands
-    int npNdx;          // number of processes for paral. over domain in x-dir
-    int npNdy;          // number of processes for paral. over domain in y-dir
-    int npNdz;          // number of processes for paral. over domain in z-dir
     int npNdx_phi;      // number of processes for calculating phi in paral. over domain in x-dir
     int npNdy_phi;      // number of processes for calculating phi in paral. over domain in y-dir
     int npNdz_phi;      // number of processes for calculating phi in paral. over domain in z-dir 
@@ -130,9 +127,6 @@ typedef struct _RPA_INPUT_OBJ {
     int npspin;         // number of spin communicators
     int npkpt;          // number of processes for paral. over k-points
     int npband;         // number of processes for paral. over bands
-    int npNdx;          // number of processes for paral. over domain in x-dir
-    int npNdy;          // number of processes for paral. over domain in y-dir
-    int npNdz;          // number of processes for paral. over domain in z-dir
     int npNdx_phi;      // number of processes for calculating phi in paral. over domain in x-dir
     int npNdy_phi;      // number of processes for calculating phi in paral. over domain in y-dir
     int npNdz_phi;      // number of processes for calculating phi in paral. over domain in z-dir 

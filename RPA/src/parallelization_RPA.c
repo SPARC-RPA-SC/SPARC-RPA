@@ -30,13 +30,13 @@
 #define max(a,b) ((a)>(b)?(a):(b))
 #define min(a,b) ((a)<(b)?(a):(b))
 
-void Setup_Comms_RPA(RPA_OBJ *pRPA, int Nspin, int Nkpts, int Nstates) {
-    // The Sternheimer equation will be solved in pSPARC. pRPA is the structure saving variables not in pSPARC.
-    dims_divide_Eigs(pRPA->nuChi0Neig, Nspin, Nkpts, Nstates, &pRPA->npnuChi0Neig, &pRPA->npspin, &pRPA->npkpt, &pRPA->npband);
-    // 1. q-point communicator, with its own q-point index (coords) and weight, saved in pRPA
+void Setup_Comms_RPA(RPA_OBJ *pRPA, int Nspin, int Nkpts, int Nstates, int Nd) {
     int nprocWorld, rankWorld;
     MPI_Comm_size(MPI_COMM_WORLD, &nprocWorld);
     MPI_Comm_rank(MPI_COMM_WORLD, &rankWorld);
+    // The Sternheimer equation will be solved in pSPARC. pRPA is the structure saving variables not in pSPARC.
+    dims_divide_Eigs(nprocWorld, rankWorld, pRPA->nuChi0Neig, Nspin, Nkpts, Nstates, Nd, &pRPA->npnuChi0Neig);
+    // 1. q-point communicator, with its own q-point index (coords) and weight, saved in pRPA
     // 3. nuChi0Eigs communicator, distribute all trial eigenvectors of nuChi0, saved in pRPA
     pRPA->npnuChi0Neig = judge_npObject(pRPA->nuChi0Neig, nprocWorld, pRPA->npnuChi0Neig);
     pRPA->nNuChi0Eigscomm = distribute_comm_load(pRPA->nuChi0Neig, pRPA->npnuChi0Neig, rankWorld, nprocWorld, &(pRPA->nuChi0EigscommIndex), &(pRPA->nuChi0EigsStartIndex), &(pRPA->nuChi0EigsEndIndex));
@@ -69,8 +69,21 @@ void Setup_Comms_RPA(RPA_OBJ *pRPA, int Nspin, int Nkpts, int Nstates) {
     // 8. domain communicator, in pSPARC
 }
 
-void dims_divide_Eigs(int nuChi0Neig, int Nspin, int Nkpts, int Nstates, int *npnuChi0Neig, int *npspin, int *npkpt, int *npband) {
+void dims_divide_Eigs(int nprocWorld, int rankWorld, int nuChi0Neig, int Nspin, int Nkpts, int Nstates, int Nd, int *npnuChi0Neig) {
     // this function is for computing the optimal dividance on nuChi0Eigs, (spins, kpts and bands for pSPARC).
+    int nproc_nuChi0Eigscomm = 0;
+    if ((*npnuChi0Neig > nprocWorld) || (*npnuChi0Neig > nuChi0Neig)) { // confined by total number of processors!
+        if (!rankWorld) printf("Input NP_NUCHI_EIGS_PARAL_RPA is larger than the total number of processors or number of eigenvalues nu chi0 operator to be solved,\n so it is not valid. This input is abandoned.\n");
+        *npnuChi0Neig = -1;
+    }
+    if (*npnuChi0Neig <= 0) { // if there is valid input npnuChi0Neig, just apply it
+        *npnuChi0Neig = (nprocWorld / (Nspin*Nkpts*Nstates)) < 1 ? 1 : (nprocWorld / (Nspin*Nkpts*Nstates)); // minumum value: 1
+        if (*npnuChi0Neig > nuChi0Neig) *npnuChi0Neig = nuChi0Neig; // maximum value: nuChi0Neig
+        if (Nd/(nuChi0Neig/(*npnuChi0Neig)) < 16) { // if the block size is too large, it may cause too few COCG max iteration time, damaging stability of future eigenproblem
+            int goodBlockSize = Nd / 16;
+            *npnuChi0Neig = nuChi0Neig / goodBlockSize + 1;
+        }
+    }
 }
 
 int judge_npObject(int nObjectInTotal, int sizeFatherComm, int npInput) {

@@ -166,7 +166,7 @@ double sternheimer_solver_gamma(SPARC_OBJ *pSPARC, int spn_i, double epsilon, do
 
     set_initial_guess_deltaPsis(pSPARC, spn_i, epsilon, omega, SternheimerRhs, deltaPsisReal, deltaPsisImag);
 
-    int maxIter = 100;
+    int maxIter = pSPARC->Nd_d_dmcomm / (2*nuChi0EigsAmounts);
     double *resNormRecords = (double *)calloc(sizeof(double), (maxIter + 1) * nuChi0EigsAmounts); // 1000 is maximum iteration time
     int iterTime = block_COCG(lhsfun, pSPARC, spn_i, psi, epsilon, omega, deltaPsisReal, deltaPsisImag, SternheimerRhs, nuChi0EigsAmounts, 1e-8, maxIter, resNormRecords);
 

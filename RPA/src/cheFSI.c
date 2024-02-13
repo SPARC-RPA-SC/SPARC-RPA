@@ -216,7 +216,7 @@ void cheFSI_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int omegaIndex) 
         minEig = find_min_eigenvalue(pSPARC, pRPA, qptIndex, omegaIndex, flagNoDmcomm);
     }
     MPI_Bcast(&minEig, 1, MPI_DOUBLE, 0, pRPA->nuChi0EigsBridgeComm);
-    double maxEig = -minEig * 1.5;
+    double maxEig = -minEig;
     double lambdaCutoff = 0.0;
     double qptOmegaWeight = pRPA->qptWts[qptIndex] * pRPA->omegaWts[omegaIndex];
     double tolErpaTermConverge = pRPA->tol_ErpaConverge * qptOmegaWeight;
@@ -229,8 +229,8 @@ void cheFSI_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int omegaIndex) 
     while (flagCheb) {
         t1 = MPI_Wtime();
         if (ncheb) {
-            minEig = pRPA->RRnuChi0Eigs[0] - 1e-4; // to prevent minEig from power method not converging
-            maxEig = -pRPA->RRnuChi0Eigs[0] * (1.5/ncheb);
+            minEig = pRPA->RRnuChi0Eigs[0]; // to prevent minEig from power method not converging
+            maxEig = -pRPA->RRnuChi0Eigs[0];
             lambdaCutoff = pRPA->RRnuChi0Eigs[pRPA->nuChi0Neig - 1] + 1e-4;
         }
         if (pSPARC->isGammaPoint) {
@@ -310,7 +310,7 @@ double find_min_eigenvalue(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int o
     double minEig = 0.0;
     double vec2norm = 1.0;
     int loopFlag = 1;
-    int maxIter = 30;
+    int maxIter = 100;
     int iter = 0;
     int nuChi0EigsAmount = 1;
     while (loopFlag) {
