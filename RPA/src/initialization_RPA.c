@@ -99,6 +99,7 @@ void initialize_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int argc, char* argv[]) {
     pRPA->RRnuChi0Eigs = (double *)malloc(pRPA->nuChi0Neig * sizeof(double));
     pRPA->RRnuChi0EigVecs = (double *)malloc(pRPA->nuChi0Neig * pRPA->nuChi0Neig * sizeof(double));
     pRPA->ErpaTerms = (double *)malloc(pRPA->Nqpts_sym * pRPA->Nomega * sizeof(double));
+    pRPA->eig_paral_maxnp = -1;
     // for structure RPA, allocating space for delta orbitals, delta density, delta \nu\chi\Delta V...
     // printf("%s\n", pRPA->filename_out);
     Setup_Comms_RPA(pRPA, pSPARC->Nspin, pSPARC->Nkpts, pSPARC->Nstates, pSPARC->Nd); // set communicator for RPA calculation

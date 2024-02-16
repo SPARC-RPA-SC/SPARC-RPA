@@ -166,9 +166,9 @@ double sternheimer_solver_gamma(SPARC_OBJ *pSPARC, int spn_i, double epsilon, do
 
     set_initial_guess_deltaPsis(pSPARC, spn_i, epsilon, omega, SternheimerRhs, deltaPsisReal, deltaPsisImag);
 
-    int maxIter = pSPARC->Nd_d_dmcomm / (2*nuChi0EigsAmounts);
+    int maxIter = pSPARC->Nd_d_dmcomm / nuChi0EigsAmounts;
     double *resNormRecords = (double *)calloc(sizeof(double), (maxIter + 1) * nuChi0EigsAmounts); // 1000 is maximum iteration time
-    int iterTime = block_COCG(lhsfun, pSPARC, spn_i, psi, epsilon, omega, deltaPsisReal, deltaPsisImag, SternheimerRhs, nuChi0EigsAmounts, 1e-8, maxIter, resNormRecords);
+    int iterTime = block_COCG(lhsfun, pSPARC, spn_i, psi, epsilon, omega, deltaPsisReal, deltaPsisImag, SternheimerRhs, nuChi0EigsAmounts, pSPARC->Nd_d_dmcomm * 4e-10, maxIter, resNormRecords);
 
     for (int nuChi0EigsIndex = 0; nuChi0EigsIndex < nuChi0EigsAmounts; nuChi0EigsIndex++) {
         for (int i = 0; i < DMnd; i++) { // bandWeight includes occupation and spin factor

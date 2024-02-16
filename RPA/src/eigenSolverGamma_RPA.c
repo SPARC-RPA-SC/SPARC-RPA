@@ -226,9 +226,7 @@ void YT_multiply_Y_gamma(RPA_OBJ* pRPA, MPI_Comm dmcomm_phi, int DMnd, int Nspin
 #endif
 }
 
-void Y_orth_gamma(SPARC_OBJ* pSPARC, RPA_OBJ* pRPA, int DMnd, int Nspinor_eig, int printFlag) { // If ScaLapack is selected to solve eigenpairs of YT*\nu\Chi0\Y,
-// then Y should be orthogonalized, since ScaLapack does not support nonsymmetric generalized eigenvalue problems
-// We have to use ScaLapack to solve nonsymmetric eigenvalue problems AX = X\Lambda
+void Y_orth_gamma(SPARC_OBJ* pSPARC, RPA_OBJ* pRPA, int DMnd, int Nspinor_eig, int printFlag) {
     double t1, t2, t3;
     int rankWorld;
     MPI_Comm_rank(MPI_COMM_WORLD, &rankWorld);
@@ -527,7 +525,7 @@ void generalized_eigenproblem_solver_gamma(RPA_OBJ* pRPA, MPI_Comm dmcomm_phi, M
                 &ilo, &ihi, scale, &abnrm, rconde, rcondv, &info2);
 
             for (int i = 0; i < m_loc*n_loc; i++) 
-                Z_BLCYC[i] = creal(Z_BLCYC_comp[i]);
+                Z_BLCYC[i] = creal(Z_BLCYC_comp[i]) + cimag(Z_BLCYC_comp[i]); // to distinguish the two complex conjugate vectors, otherwise numerical problem
             for (int i = 0; i < N; i++)
                 alphar[i] = creal(alpha[i]);
             t2 = MPI_Wtime();

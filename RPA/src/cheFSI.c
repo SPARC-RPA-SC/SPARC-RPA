@@ -142,7 +142,7 @@ void test_Hx_nuChi0(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA) {
 }
 
 void test_Hx(SPARC_OBJ *pSPARC, double *testHxAccuracy)
-{ // make a test to see the accuracy of eigenvalues and eigenvectors saved in every nuChi0Eigscomm
+{
     int DMnd = pSPARC->Nd_d_dmcomm;
     int DMndsp = DMnd * pSPARC->Nspinor_spincomm;
     int *DMVertices = pSPARC->DMVertices_dmcomm;
@@ -277,8 +277,7 @@ void cheFSI_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int omegaIndex) 
         if (!pRPA->nuChi0EigscommIndex) { // rank 0 in a nuChi0Eigscomm must be in dmcomm_phi of this nuChi0Eigscomm
         // if pRPA->nuChi0EigscommIndex == 0, then all processors in its dmcomm_phi contain all the eigenvalues
             if (!rank) { // to make things simple, just ask rank 0 of the 0th nuChi0Eigscomm to compute convergence
-                int signImag = -1;
-                ErpaTerm = compute_ErpaTerm(pRPA->RRnuChi0Eigs, pRPA->nuChi0Neig, pRPA->omega01[omegaIndex], qptOmegaWeight, &signImag);
+                ErpaTerm = compute_ErpaTerm(pRPA->RRnuChi0Eigs, pRPA->nuChi0Neig, pRPA->omega01[omegaIndex], qptOmegaWeight);
                 flagCheb = fabs(ErpaTerm - lastErpaTerm) > tolErpaTermConverge ? 1 : 0;
                 if (ncheb == pRPA->maxitFiltering) flagCheb = 0;
                 lastErpaTerm = ErpaTerm;
@@ -344,7 +343,7 @@ double find_min_eigenvalue(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int o
     return minEig;
 }
 
-double compute_ErpaTerm(double *RRnuChi0Eigs, int nuChi0Neig, double omegaMesh01, double qptOmegaWeight, int *signImag) {
+double compute_ErpaTerm(double *RRnuChi0Eigs, int nuChi0Neig, double omegaMesh01, double qptOmegaWeight) {
     double ErpaTerm = 0.0;
     for (int i = 0; i < nuChi0Neig; i++) {
         ErpaTerm += log(1.0 - RRnuChi0Eigs[i]) + RRnuChi0Eigs[i];
