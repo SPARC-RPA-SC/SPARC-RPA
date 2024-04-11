@@ -1,3 +1,7 @@
+/*
+pois_kron function in this file, used for getting sqrt(\nu)*vectors, reference:
+Xin Jing, Phanish Suryanarayana, Accelerating real-space exact exchange calculation through Kronecker product formalism (To be published)
+*/
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
