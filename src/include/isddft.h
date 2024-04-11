@@ -70,6 +70,19 @@
 // amu/Bohr^3 in g/cc
 #define CONST_AMU_BOHR3_GCC 11.2058730627683
 
+typedef struct _KRON_LAP {
+    int Nx;
+    int Ny;
+    int Nz;
+    int Nd;
+    double *Vx;
+    double *Vy;
+    double *Vz;
+    double *eig;
+    double *inv_eig;
+} KRON_LAP;
+
+
 typedef struct _D2D_OBJ {
     int n_target; // number of target processes to communicate with
     int *target_ranks; // target ranks in union communicator
@@ -825,6 +838,7 @@ typedef struct _SPARC_OBJ{
     int MAXIT_FOCK;                 // Maximum number of iterations for Hartree-Fock outer loop
     int MINIT_FOCK;                 // Minimum number of iterations for Hartree-Fock outer loop
     double exx_frac;                // hybrid mixing coefficient
+    int ExxDivFlag;        // Method for integrable singularity 
     double hyb_range_fock;          // hybrid short range for fock operator 
     double hyb_range_pbe;           // hybrid short range for exchange correlation 
     int EXXMeth_Flag;               // Method to solve Poisson's equation, in Real space or Fourier space
@@ -868,6 +882,10 @@ typedef struct _SPARC_OBJ{
     // tool variables for hybrid calculation
     double ACEtime;                 // Time for creating ace operator
     double Exxtime;                 // Time for applying Vexx operator
+    double *pois_const;             // Constants for FFT solver in Poisson's equation
+    double *pois_const_stress;      // Constants for FFT solver in Poisson's equation in stress
+    double *pois_const_stress2;     // Constants for FFT solver in Poisson's equation in stress
+    double *pois_const_press;       // Constants for FFT solver in Poisson's equation in press
     double *pois_FFT_const;         // Constants for FFT solver in Poisson's equation
     double *pois_FFT_const_stress;  // Constants for FFT solver in Poisson's equation in stress
     double *pois_FFT_const_stress2; // Constants for FFT solver in Poisson's equation in stress
@@ -889,6 +907,7 @@ typedef struct _SPARC_OBJ{
     int nrows_M;                    // local number of row of M matrix
     int ncols_M;                    // local number of column of M matrix
     int Nband_bandcomm_M;           // number of bands of M assigned to current bandcomm (LOCAL)
+    KRON_LAP* kron_lap_exx;         // structure for kronecker product laplacian
 
     /* SQ methods */
     int SQFlag;                     // Flag of SQ method

@@ -10,6 +10,7 @@
 #include "tools.h"
 #include "linearSolver.h"
 #include "lapVecRoutines.h"
+#include "exactExchange.h"
 
 #include "main.h"
 #include "restoreElectronicGroundState.h"
@@ -17,12 +18,11 @@
 #include "linearSolvers.h"
 #include "tools_RPA.h"
 
-void collect_transfer_deltaRho_gamma(SPARC_OBJ *pSPARC, double *deltaRhos, double *deltaRhos_phi, int nuChi0EigsAmount, int printFlag, MPI_Comm nuChi0Eigscomm) {
+void collect_deltaRho_gamma(SPARC_OBJ *pSPARC, double *deltaRhos, int nuChi0EigsAmount, int printFlag, MPI_Comm nuChi0Eigscomm) {
+    int globalRank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &globalRank);
     int DMnd = pSPARC->Nd_d_dmcomm;
-    // int ncol = pSPARC->Nband_bandcomm;
-    // int Nkpts_kptcomm = pSPARC->Nkpts_kptcomm;
     int flagNoDmcomm = (pSPARC->spincomm_index < 0 || pSPARC->kptcomm_index < 0 || pSPARC->bandcomm_index < 0 || pSPARC->dmcomm == MPI_COMM_NULL);
-
     if (!flagNoDmcomm) {
         // sum over spin comm group
         if(pSPARC->npspin > 1) {        
@@ -56,11 +56,9 @@ void collect_transfer_deltaRho_gamma(SPARC_OBJ *pSPARC, double *deltaRhos, doubl
             }
         }
     }
-    for (int i = 0; i < nuChi0EigsAmount; i++)
-        transfer_deltaRho(pSPARC, nuChi0Eigscomm, deltaRhos + i*DMnd, deltaRhos_phi + i*pSPARC->Nd_d);
 }
 
-void collect_transfer_deltaRho_kpt(SPARC_OBJ *pSPARC, double _Complex *deltaRhos_kpt, double _Complex *deltaRhos_kpt_phi, int nuChi0EigsAmount, int printFlag, MPI_Comm nuChi0Eigscomm) {
+void collect_deltaRho_kpt(SPARC_OBJ *pSPARC, double _Complex *deltaRhos_kpt, int nuChi0EigsAmount, int printFlag, MPI_Comm nuChi0Eigscomm) {
     int DMnd = pSPARC->Nd_d_dmcomm;
     // int ncol = pSPARC->Nband_bandcomm;
     // int Nkpts_kptcomm = pSPARC->Nkpts_kptcomm;
@@ -99,76 +97,18 @@ void collect_transfer_deltaRho_kpt(SPARC_OBJ *pSPARC, double _Complex *deltaRhos
             }
         }
     }
-    for (int i = 0; i < nuChi0EigsAmount; i++)
-        transfer_deltaRho_kpt(pSPARC, nuChi0Eigscomm, deltaRhos_kpt + i*DMnd, deltaRhos_kpt_phi + i*pSPARC->Nd_d);
-}
-
-void transfer_deltaRho(SPARC_OBJ *pSPARC, MPI_Comm nuChi0Eigscomm, double *rho_send, double *rho_recv) {
-    #ifdef DEBUG
-    double t1, t2;
-    #endif
-        int rank;
-        MPI_Comm_rank(nuChi0Eigscomm, &rank);
-        
-        int sdims[3], rdims[3], gridsizes[3];
-        sdims[0] = pSPARC->npNdx; sdims[1] = pSPARC->npNdy; sdims[2] = pSPARC->npNdz;
-        rdims[0] = pSPARC->npNdx_phi; rdims[1] = pSPARC->npNdy_phi; rdims[2] = pSPARC->npNdz_phi;
-        gridsizes[0] = pSPARC->Nx; gridsizes[1] = pSPARC->Ny; gridsizes[2] = pSPARC->Nz;
-    #ifdef DEBUG
-        t1 = MPI_Wtime();
-    #endif
-        D2D(&pSPARC->d2d_dmcomm, &pSPARC->d2d_dmcomm_phi, gridsizes, pSPARC->DMVertices_dmcomm, rho_send, 
-            pSPARC->DMVertices, rho_recv, (pSPARC->spincomm_index == 0 && pSPARC->kptcomm_index == 0 && pSPARC->bandcomm_index == 0) ? pSPARC->dmcomm : MPI_COMM_NULL, sdims, 
-            pSPARC->dmcomm_phi, rdims, nuChi0Eigscomm, sizeof(double));
-    #ifdef DEBUG
-        t2 = MPI_Wtime();
-        if (rank == 0) printf("rank = %d, D2D took %.3f ms\n", rank, (t2-t1)*1e3);
-    #endif
-}
-
-void transfer_deltaRho_kpt(SPARC_OBJ *pSPARC, MPI_Comm nuChi0Eigscomm, double _Complex *rho_send, double _Complex *rho_recv) {
-    #ifdef DEBUG
-    double t1, t2;
-    #endif
-        int rank;
-        MPI_Comm_rank(nuChi0Eigscomm, &rank);
-        
-        int sdims[3], rdims[3], gridsizes[3];
-        sdims[0] = pSPARC->npNdx; sdims[1] = pSPARC->npNdy; sdims[2] = pSPARC->npNdz;
-        rdims[0] = pSPARC->npNdx_phi; rdims[1] = pSPARC->npNdy_phi; rdims[2] = pSPARC->npNdz_phi;
-        gridsizes[0] = pSPARC->Nx; gridsizes[1] = pSPARC->Ny; gridsizes[2] = pSPARC->Nz;
-    #ifdef DEBUG
-        t1 = MPI_Wtime();
-    #endif
-        D2D(&pSPARC->d2d_dmcomm, &pSPARC->d2d_dmcomm_phi, gridsizes, pSPARC->DMVertices_dmcomm, rho_send, 
-            pSPARC->DMVertices, rho_recv, (pSPARC->spincomm_index == 0 && pSPARC->kptcomm_index == 0 && pSPARC->bandcomm_index == 0) ? pSPARC->dmcomm : MPI_COMM_NULL, sdims, 
-            pSPARC->dmcomm_phi, rdims, nuChi0Eigscomm, sizeof(double _Complex));
-    #ifdef DEBUG
-        t2 = MPI_Wtime();
-        if (rank == 0) printf("rank = %d, D2D took %.3f ms\n", rank, (t2-t1)*1e3);
-    #endif
 }
 
 
-void Calculate_deltaRhoPotential_gamma(SPARC_OBJ *pSPARC, double *deltaRhos_phi, double *deltaVs_phi, int nuChi0EigsAmount, int printFlag, double *deltaVsForPrint, int nuChi0EigscommIndex, MPI_Comm nuChi0Eigscomm) {
+void Calculate_sqrtNu_vecs_gamma(SPARC_OBJ *pSPARC, double *deltaRhos, double *deltaVs, int nuChi0EigsAmount, int printFlag, int flagNoDmcomm, int nuChi0EigscommIndex, MPI_Comm nuChi0Eigscomm) {
     int rank;
     MPI_Comm_rank(nuChi0Eigscomm, &rank);
 
-    if (pSPARC->dmcomm_phi == MPI_COMM_NULL) {
-        return; 
-    } 
-
-    double *rhs = (double *)calloc(sizeof(double), nuChi0EigsAmount * pSPARC->Nd_d);
-    for (int i = 0; i < nuChi0EigsAmount * pSPARC->Nd_d; i++) {
-        rhs[i] = 4.0 * M_PI * deltaRhos_phi[i]; // the minus sign is in function poisson_residual
+    if (flagNoDmcomm) {
+        return;
     }
-    poissonSolver_gamma(pSPARC, deltaVs_phi, rhs, nuChi0EigsAmount, nuChi0EigscommIndex);
-    free(rhs);
+    poissonSolver_gamma(pSPARC, deltaVs, deltaRhos, nuChi0EigsAmount, nuChi0EigscommIndex);
     if (printFlag) {
-        // printing delta V, but they are not the delta V for the next filtering
-        for (int i = 0; i < nuChi0EigsAmount; i++) {
-            Transfer_Veff_loc_RPA(pSPARC, nuChi0Eigscomm, deltaVs_phi + i*pSPARC->Nd_d, deltaVsForPrint + i * pSPARC->Nd_d_dmcomm);
-        }
         if ((pSPARC->spincomm_index == 0) && (pSPARC->kptcomm_index == 0) && (pSPARC->bandcomm_index == 0)){
             int dmcommRank;
             MPI_Comm_rank(pSPARC->dmcomm, &dmcommRank);
@@ -180,7 +120,7 @@ void Calculate_deltaRhoPotential_gamma(SPARC_OBJ *pSPARC, double *deltaRhos_phi,
                 } else {
                     for (int nuChi0EigIndex = 0; nuChi0EigIndex < nuChi0EigsAmount; nuChi0EigIndex++) {
                         for (int index = 0; index < pSPARC->Nd_d_dmcomm; index++) {
-                            fprintf(outputDVs, "%12.9f\n", deltaVsForPrint[nuChi0EigIndex*pSPARC->Nd_d_dmcomm + index]);
+                            fprintf(outputDVs, "%12.9f\n", deltaVs[nuChi0EigIndex*pSPARC->Nd_d_dmcomm + index]);
                         }
                         fprintf(outputDVs, "\n");
                     }
@@ -191,91 +131,72 @@ void Calculate_deltaRhoPotential_gamma(SPARC_OBJ *pSPARC, double *deltaRhos_phi,
     }
 }
 
-void Calculate_deltaRhoPotential_kpt(SPARC_OBJ *pSPARC, double _Complex *deltaRhos_kpt_phi, double _Complex *deltaVs_kpt_phi, double qptx, double qpty, double qptz, int nuChi0EigsAmount, int printFlag, int nuChi0EigscommIndex, MPI_Comm nuChi0Eigscomm) {
+void Calculate_deltaRhoPotential_kpt(SPARC_OBJ *pSPARC, double _Complex *deltaRhos_kpt, double _Complex *deltaVs_kpt, double qptx, double qpty, double qptz, int nuChi0EigsAmount, int printFlag, int nuChi0EigscommIndex, MPI_Comm nuChi0Eigscomm) {
     int rank;
     MPI_Comm_rank(nuChi0Eigscomm, &rank);
 
-    if (pSPARC->dmcomm_phi == MPI_COMM_NULL) {
-        return; 
-    } 
-
-    double _Complex *rhs = (double _Complex*)calloc(sizeof(double _Complex), nuChi0EigsAmount * pSPARC->Nd_d);
-    for (int i = 0; i < nuChi0EigsAmount * pSPARC->Nd_d; i++) {
-        rhs[i] = 4.0 * M_PI * deltaRhos_kpt_phi[i];
+    int flagNoDmcomm = (pSPARC->spincomm_index < 0 || pSPARC->kptcomm_index < 0 || pSPARC->bandcomm_index < 0 || pSPARC->dmcomm == MPI_COMM_NULL);
+    if (flagNoDmcomm) {
+        return;
     }
-    poissonSolver_kpt(pSPARC, qptx, qpty, qptz, deltaVs_kpt_phi, rhs, nuChi0EigsAmount, nuChi0EigscommIndex);
+
+    double _Complex *rhs = (double _Complex*)calloc(sizeof(double _Complex), nuChi0EigsAmount * pSPARC->Nd_d_dmcomm);
+    for (int i = 0; i < nuChi0EigsAmount * pSPARC->Nd_d_dmcomm; i++) {
+        rhs[i] = 4.0 * M_PI * deltaRhos_kpt[i];
+    }
+    poissonSolver_kpt(pSPARC, qptx, qpty, qptz, deltaVs_kpt, rhs, nuChi0EigsAmount, nuChi0EigscommIndex);
     free(rhs);
 }
 
-void poissonSolver_gamma(SPARC_OBJ *pSPARC, double *deltaVs_phi, double *rhs, int nuChi0EigsAmounts, int nuChi0EigscommIndex) {
-    int rank;
-    MPI_Comm_rank(pSPARC->dmcomm_phi, &rank);
-    int Nd_d = pSPARC->Nd_d;
-    // function pointer that applies b + Laplacian * x
-    void (*residule_fptr) (SPARC_OBJ*, int, double, double*, double*, double*, MPI_Comm, double*) = poisson_residual; // poisson_residual is defined in lapVecRoutines.c
-    void (*Jacobi_fptr) (SPARC_OBJ*, int, double, double*, double*, MPI_Comm) = Jacobi_preconditioner;
+void poissonSolver_gamma(SPARC_OBJ *pSPARC, double *deltaVs, double *rhs, int nuChi0EigsAmounts, int nuChi0EigscommIndex) {
+    int globalRank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &globalRank);
+    int Nd_d = pSPARC->Nd_d_dmcomm;
+
     for (int nuChi0EigsIndex = 0; nuChi0EigsIndex < nuChi0EigsAmounts; nuChi0EigsIndex++) {
     #ifdef DEBUG
         double t1, t2;
         t1 = MPI_Wtime();
-        double int_rhs = 0.0;
-        // find integral of b, rho locally
-        for (int i = 0; i < Nd_d; i++) {
-            int_rhs += rhs[nuChi0EigsIndex*Nd_d + i];
+    #endif
+        double deltaV_shift = 0.0;
+        VectorSum (rhs + nuChi0EigsIndex*Nd_d, Nd_d, &deltaV_shift, pSPARC->dmcomm);
+        if (pSPARC->BC == 2) {
+            deltaV_shift /= (double)pSPARC->Nd;
+            VectorShift(rhs + nuChi0EigsIndex*Nd_d, Nd_d, -deltaV_shift, pSPARC->dmcomm);
         }
-        // int_rhs *= pSPARC->dV;
-        double vt, vsum;
-        vt = int_rhs;
-        MPI_Allreduce(&vt, &vsum, 1, MPI_DOUBLE, MPI_SUM, pSPARC->dmcomm_phi); 
-        int_rhs   = vsum;
-        t2 = MPI_Wtime();
-        if(!rank) 
-            printf("nuChi0Eigscomm %d, dmcomm_phi rank %d, nuChi0EigsIndex %d, int_rhs = %18.14f, checking this took %.3f ms\n",
-                nuChi0EigscommIndex, rank, nuChi0EigsIndex, int_rhs, (t2-t1)*1e3);
-        t1 = MPI_Wtime();
-    #endif    
-
-        // call linear solver to solve the poisson equation
-        // solve -Laplacian phi = 4 * M_PI * (rho + b) 
-        // TODO: use real preconditioner instead of Jacobi preconditioner!
-        if(pSPARC->POISSON_SOLVER == 0) {
-            // double omega, beta;
-            // int m, p;
-            // omega = 0.6, beta = 0.6; //omega = 0.6, beta = 0.6;
-            // m = 7, p = 6; //m = 9, p = 8; //m = 9, p = 9;
-            // AAR(pSPARC, residule_fptr, Jacobi_fptr, 0.0, Nd_d, deltaVs_phi + nuChi0EigsIndex*Nd_d, rhs + nuChi0EigsIndex*Nd_d, 
-            // omega, beta, m, p, pSPARC->TOL_POISSON, pSPARC->MAXIT_POISSON, pSPARC->dmcomm_phi);
-
-            void (*Ax)(const SPARC_OBJ *, const int, const int *, const int, const double, double *, const int, double *, const int, MPI_Comm) = Lap_vec_mult;
-            CG(pSPARC, Ax, Nd_d, pSPARC->DMVertices, deltaVs_phi + nuChi0EigsIndex*Nd_d, rhs + nuChi0EigsIndex*Nd_d, pSPARC->TOL_POISSON, pSPARC->MAXIT_POISSON, pSPARC->dmcomm_phi);
-        }
-
     #ifdef DEBUG
         t2 = MPI_Wtime();
-        if (rank == 0) printf("Solving Poisson took %.3f ms\n", (t2-t1)*1e3);
+        if(!globalRank) 
+            printf("nuChi0Eigscomm %d, global rank %d, nuChi0EigsIndex %d, initial int_rhs = %18.14f, checking this took %.3f ms\n",
+                nuChi0EigscommIndex, globalRank, nuChi0EigsIndex, deltaV_shift, (t2-t1)*1e3);
+        t1 = MPI_Wtime();
+    #endif    
+        // no need to multiply 4pi on the rhs, it is included in pois_const 
+        pois_kron(pSPARC, rhs + nuChi0EigsIndex*Nd_d, pSPARC->pois_const, 1, deltaVs + nuChi0EigsIndex*Nd_d);
+    #ifdef DEBUG
+        t2 = MPI_Wtime();
+        if (globalRank == 0) printf("Solving Poisson took %.3f ms\n", (t2-t1)*1e3);
     #endif
 
         // shift the electrostatic potential so that its integral is zero for periodic systems
         if (pSPARC->BC == 2) {
-            double deltaV_shift = 0.0;
-            VectorSum  (deltaVs_phi + nuChi0EigsIndex*Nd_d, Nd_d, &deltaV_shift, pSPARC->dmcomm_phi);
+            deltaV_shift = 0.0;
+            VectorSum  (deltaVs + nuChi0EigsIndex*Nd_d, Nd_d, &deltaV_shift, pSPARC->dmcomm);
             deltaV_shift /= (double)pSPARC->Nd;
-            VectorShift(deltaVs_phi + nuChi0EigsIndex*Nd_d, Nd_d, -deltaV_shift, pSPARC->dmcomm_phi);
+            VectorShift(deltaVs + nuChi0EigsIndex*Nd_d, Nd_d, -deltaV_shift, pSPARC->dmcomm);
         }
     }
 }
 
-void poissonSolver_kpt(SPARC_OBJ *pSPARC, double qptx, double qpty, double qptz, double _Complex *deltaVs_kpt_phi, double _Complex *rhs, int nuChi0EigsAmounts, int nuChi0EigscommIndex) {
+void poissonSolver_kpt(SPARC_OBJ *pSPARC, double qptx, double qpty, double qptz, double _Complex *deltaVs_kpt, double _Complex *rhs, int nuChi0EigsAmounts, int nuChi0EigscommIndex) {
     int rank;
     MPI_Comm_rank(pSPARC->dmcomm_phi, &rank);
-    int Nd_d = pSPARC->Nd_d;
+    int Nd_d = pSPARC->Nd_d_dmcomm;
     int gammaFlag = 0;
     if (sqrt(qptx*qptx + qpty*qpty + qptz*qptz) < 1e-10) {
         gammaFlag = 1;
     }
-    // function pointer that applies b + Laplacian * x
-    void (*residule_fptr) (SPARC_OBJ*, int, double, double, double, double, double _Complex*, double _Complex*, double _Complex*, MPI_Comm, double*) = poisson_residual_kpt; // poisson_residual is defined in lapVecRoutines.c
-    void (*Jacobi_fptr) (SPARC_OBJ*, int, double, double _Complex*, double _Complex*, MPI_Comm) = Jacobi_preconditioner_kpt;
+
     for (int nuChi0EigsIndex = 0; nuChi0EigsIndex < nuChi0EigsAmounts; nuChi0EigsIndex++) {
     #ifdef DEBUG
         double t1, t2;
@@ -285,18 +206,6 @@ void poissonSolver_kpt(SPARC_OBJ *pSPARC, double qptx, double qpty, double qptz,
         // call linear solver to solve the poisson equation
         // solve -Laplacian phi = 4 * M_PI * (rho + b) 
         // TODO: use real preconditioner instead of Jacobi preconditioner!
-        if(pSPARC->POISSON_SOLVER == 0) {
-            double omega, beta;
-            int m, p;
-            omega = 0.6, beta = 0.6; //omega = 0.6, beta = 0.6;
-            m = 7, p = 6; //m = 9, p = 8; //m = 9, p = 9;
-            AAR_kpt(pSPARC, residule_fptr, Jacobi_fptr, 0.0, Nd_d, qptx, qpty, qptz, deltaVs_kpt_phi + nuChi0EigsIndex*Nd_d, rhs + nuChi0EigsIndex*Nd_d, 
-            omega, beta, m, p, pSPARC->TOL_POISSON, pSPARC->MAXIT_POISSON, pSPARC->dmcomm_phi);
-        } else {
-            if (rank == 0) printf("Please provide a valid poisson solver!\n");
-            exit(EXIT_FAILURE);
-            // CG(pSPARC, Lap_vec_mult, pSPARC->Nd, Nd_d, pSPARC->elecstPotential, rhs, pSPARC->TOL_POISSON, pSPARC->MAXIT_POISSON, pSPARC->dmcomm_phi);
-        }
 
     #ifdef DEBUG
         t2 = MPI_Wtime();
@@ -306,9 +215,9 @@ void poissonSolver_kpt(SPARC_OBJ *pSPARC, double qptx, double qpty, double qptz,
         // shift the electrostatic potential so that its integral is zero for periodic systems
         if ((pSPARC->BC == 2) && gammaFlag) {
             double _Complex deltaV_shift = 0.0;
-            VectorSumComplex  (deltaVs_kpt_phi + nuChi0EigsIndex*Nd_d, Nd_d, &deltaV_shift, pSPARC->dmcomm_phi);
+            VectorSumComplex  (deltaVs_kpt + nuChi0EigsIndex*Nd_d, Nd_d, &deltaV_shift, pSPARC->dmcomm);
             deltaV_shift /= (double)pSPARC->Nd;
-            VectorShiftComplex(deltaVs_kpt_phi + nuChi0EigsIndex*Nd_d, Nd_d, -deltaV_shift, pSPARC->dmcomm_phi);
+            VectorShiftComplex(deltaVs_kpt + nuChi0EigsIndex*Nd_d, Nd_d, -deltaV_shift, pSPARC->dmcomm);
         }
     }
 }

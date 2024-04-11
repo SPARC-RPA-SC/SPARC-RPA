@@ -60,19 +60,18 @@ typedef struct _RPA_OBJ {
     int npspin;         // number of spin communicators
     int npkpt;          // number of processes for paral. over k-points
     int npband;         // number of processes for paral. over bands
-    int npNdx_phi;      // number of processes for calculating phi in paral. over domain in x-dir
-    int npNdy_phi;      // number of processes for calculating phi in paral. over domain in y-dir
-    int npNdz_phi;      // number of processes for calculating phi in paral. over domain in z-dir 
     // other settings for RPA computation
     char filename[L_STRING];
     char filename_out[L_STRING]; 
     char InDensTCubFilename[L_STRING];
     char InDensUCubFilename[L_STRING];
     char InDensDCubFilename[L_STRING];
-    char InOrbitalFilename[L_STRING];
+    char timeRecordname[L_STRING];
     int maxitFiltering;
     int ChebDegreeRPA;
-    double tol_ErpaConverge;
+    double sternRelativeResTol;
+    int flagPQ;
+    int flagCOCGinitial;
     // q-points, which is k-point grid without shift after symmetry reduction
     int Nqpts_sym; // amount of q-points
     double *qptWts;
@@ -84,9 +83,12 @@ typedef struct _RPA_OBJ {
     double *omega;
     double *omega01;
     double *omegaWts;
+    int SternBlockSize[15];
+    double tol_EigConverge[15];
     // amount of eigenvalues of \nu\chi0 to be solved
     int nuChi0Neig;
     double *RRnuChi0Eigs;
+    double *RRoriginSeqEigs;
     double *RRnuChi0EigVecs;
     double *ErpaTerms; // save Erpa(qpt, omega) terms, length Nqpts_sym * Nomega
     // symmetric reduced k-point grid, saved for reading orbitals
@@ -105,19 +107,23 @@ typedef struct _RPA_OBJ {
     double *neighborBandsGamma;
     double *allEpsilonsGamma;
     // save \Delta V s, \Delta\psi and \Delta\rho s
-    double *deltaVs_phi; // in dmcomm_phi, save deltaVs; length is pSPARC->Nd_d * nNuChi0Eigscomm
-    double _Complex *deltaVs_kpt_phi; // in dmcomm_phi, save deltaVs; length is pSPARC->Nd_d * nNuChi0Eigscomm
-    double *Ys_phi; // in dmcomm_phi, save medium variable Y for Chebyshev filtering; length is pSPARC->Nd_d * nNuChi0Eigscomm
-    double _Complex *Ys_kpt_phi; // in dmcomm_phi, save medium variable Y for Chebyshev filtering; length is pSPARC->Nd_d * nNuChi0Eigscomm
+    double *Ys; // in dmcomm, save medium variable Y for Chebyshev filtering; length is pSPARC->Nd_d_dmcomm * nNuChi0Eigscomm
+    double *Ys_BLCYC;
+    double _Complex *Ys_kpt; // in dmcomm, save medium variable Y for Chebyshev filtering; length is pSPARC->Nd_d_dmcomm * nNuChi0Eigscomm
+    double _Complex *Ys_kpt_BLCYC; 
     double *deltaVs; // Its length is pSPARC->Nd_d_dmcomm*nNuChi0Eigscomm
     double _Complex *deltaVs_kpt; // Its length is pSPARC->Nd_d_dmcomm*nNuChi0Eigscomm
-    double *deltaRhos_phi;
-    double _Complex *deltaRhos_kpt_phi;
+    double *sprtNuDeltaVs;
+    double _Complex *sprtNuDeltaVs_kpt;
     double *deltaRhos; // in dmcomm, save sum of \psi_n^*(\Delta\psi_n) over bandcomm n; then AllReduce over bandcomm, kptcomm and spincomm. Its length is pSPARC->Nd_d_dmcomm * nNuChi0Eigscomm
     double _Complex *deltaRhos_kpt; // in dmcomm, save sum of \psi_n^*(\Delta\psi_n) over bandcomm n; then AllReduce over bandcomm, kptcomm and spincomm. Its length is pSPARC->Nd_d_dmcomm * nNuChi0Eigscomm
     double *deltaPsisReal; // in dmcomm, save real part of (\Delta\psi_n) of the current band, kpt and spin. Its length is pSPARC->Nd_d_dmcomm * nNuChi0Eigscomm
     double *deltaPsisImag; // in dmcomm, save imag part of (\Delta\psi_n) of the current band, kpt and spin. Its length is pSPARC->Nd_d_dmcomm * nNuChi0Eigscomm
     double _Complex *deltaPsis_kpt; // in dmcomm, save (\Delta\psi_n) of the current band, kpt, spin and \Delta V. Its length is pSPARC->Nd_d_dmcomm * 2
+    // save bands for COCG initial guess
+    double *allXorb;
+    double _Complex *allXorb_kpt;
+    double *allLambdas;
 } RPA_OBJ;
 
 typedef struct _RPA_INPUT_OBJ {
@@ -127,21 +133,21 @@ typedef struct _RPA_INPUT_OBJ {
     int npspin;         // number of spin communicators
     int npkpt;          // number of processes for paral. over k-points
     int npband;         // number of processes for paral. over bands
-    int npNdx_phi;      // number of processes for calculating phi in paral. over domain in x-dir
-    int npNdy_phi;      // number of processes for calculating phi in paral. over domain in y-dir
-    int npNdz_phi;      // number of processes for calculating phi in paral. over domain in z-dir 
     // other settings for RPA computation
     int nuChi0Neig;
     int Nomega;
+    int SternBlockSize[15];
+    double tol_EigConverge[15];
     int maxitFiltering;
     int ChebDegreeRPA;
-    double tol_ErpaConverge;
+    int flagPQ;
+    int flagCOCGinitial;
+    double sternRelativeResTol;
     char filename[L_STRING];
     char filename_out[L_STRING]; 
     char InDensTCubFilename[L_STRING];
     char InDensUCubFilename[L_STRING];
     char InDensDCubFilename[L_STRING];
-    char InOrbitalFilename[L_STRING];
 } RPA_INPUT_OBJ;
 
 #endif

@@ -17,6 +17,8 @@
 void prepare_PQ_operators(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA) {
     int flagNoDmcomm = (pSPARC->spincomm_index < 0 || pSPARC->kptcomm_index < 0 || pSPARC->bandcomm_index < 0 || pSPARC->dmcomm == MPI_COMM_NULL);
     if (flagNoDmcomm) return;
+    if (pRPA->nuChi0EigscommIndex < 0)
+        return;
     int rank;
     int Ns = pSPARC->Nstates;
     MPI_Comm blacscomm = pSPARC->blacscomm;

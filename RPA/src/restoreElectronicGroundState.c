@@ -25,6 +25,10 @@
 
 void restore_electronicGroundState(SPARC_OBJ *pSPARC, MPI_Comm nuChi0Eigscomm, MPI_Comm nuChi0EigsBridgeComm, int nuChi0EigscommIndex, int rank0nuChi0EigscommInWorld,
      double *symk1, double *symk2, double *symk3, int **kPqSymList, int Nkpts_sym) {
+    pSPARC->Xorb = NULL;
+    pSPARC->Yorb = NULL;
+    pSPARC->Xorb_kpt = NULL;
+    pSPARC->Yorb_kpt = NULL;
     if (nuChi0EigscommIndex == -1) return; // not take part in computation
     int rank;
     MPI_Comm_rank(nuChi0Eigscomm, &rank);
@@ -446,7 +450,7 @@ void restore_eigval_occ(SPARC_OBJ* pSPARC, MPI_Comm nuChi0Eigscomm, MPI_Comm nuC
     if (nuChi0EigscommIndex == 0) {
         if (!rank) {
             char inputEigsFnames[L_STRING+L_PSD];
-            snprintf(inputEigsFnames, 100, "%s.eigen", pSPARC->filename);
+            snprintf(inputEigsFnames, L_STRING + 6, "%s.eigen", pSPARC->filename);
             read_eigval_occ(inputEigsFnames, pSPARC->Nspin, Nkpts_sym, Ns, coordsKptsSym, eigsKptsSym, occsKptsSym);
             MPI_Bcast(coordsKptsSym, 3*Nkpts_sym, MPI_DOUBLE, 0, nuChi0Eigscomm);
             MPI_Bcast(eigsKptsSym, Ns * Nkpts_sym * nspin, MPI_DOUBLE, 0, nuChi0Eigscomm);

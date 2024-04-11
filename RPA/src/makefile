@@ -33,7 +33,7 @@ ENABLE_SIMD_COMPLEX = 1
 # BLASROOT = /usr/lib64
 # LDFLAGS += -L$(BLASROOT)
 
-CPPFLAGS = -Iinclude -I../../src/include -I../../src/xc/exx/include -I../../src/xc/vdW/d3/include -I../../src/xc/vdW/vdWDF/include -I../../src/xc/mgga/include -I../../src/highT/include -I../../src/cyclix/include
+CPPFLAGS = -Iinclude -I../../src/include -I../../src/xc/exx/include -I../../src/xc/vdW/d3/include -I../../src/xc/vdW/vdWDF/include -I../../src/xc/mgga/include -I../../src/highT/include -I../../src/cyclix/include -I../../src/ddbp
 LDLIBS   = -lrt
 
 ifeq ($(USE_MKL), 1)
@@ -83,7 +83,7 @@ SPARC_OBJSC = ../../src/initialization.o ../../src/readfiles.o ../../src/atomdat
         ../../src/hamiltonianVecRoutines.o ../../src/lapVecRoutines.o ../../src/lapVecRoutinesKpt.o \
         ../../src/linearSolver.o ../../src/mixing.o ../../src/exchangeCorrelation.o ../../src/eigenSolver.o ../../src/eigenSolverKpt.o ../../src/energy.o      \
         ../../src/forces.o ../../src/stress.o ../../src/pressure.o ../../src/finalization.o ../../src/spinOrbitCoupling.o ../../src/printing.o \
-        ../../src/linearAlgebra.o \
+        ../../src/linearAlgebra.o ../../src/kroneckerLaplacian.o\
         ../../src/xc/vdW/d3/d3correction.o ../../src/xc/vdW/d3/d3findR0ab.o ../../src/xc/vdW/d3/d3copyC6.o                       \
         ../../src/xc/vdW/d3/d3initialization.o ../../src/xc/vdW/d3/d3finalization.o ../../src/xc/vdW/d3/d3forceStress.o          \
         ../../src/xc/vdW/vdWDF/vdWDFinitialization.o ../../src/xc/vdW/vdWDF/vdWDFfinalization.o                        \
@@ -104,7 +104,7 @@ SPARC_OBJSC = ../../src/initialization.o ../../src/readfiles.o ../../src/atomdat
 OBJSC = main.o initialization_SPARC.o initialization_RPA.o generateKgrid.o parallelization_RPA.o parallelization_SPARC.o \
 	restoreElectronicGroundState.o prepare_PQ_operators.o cheFSI.o eigenSolverGamma_RPA.o eigenSolverKpt_RPA.o \
         nuChi0VecRoutines.o sternheimerEquation.o linearSolvers.o electrostatics_RPA.o printResult.o \
-        finalization_RPA.o tools_RPA.o
+        finalization_RPA.o test_Hx_nuChi0_eigSolver.o tools_RPA.o
 
 LIBBASE = ../lib/rpacalc
 

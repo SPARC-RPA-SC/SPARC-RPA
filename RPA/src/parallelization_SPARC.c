@@ -1120,14 +1120,6 @@ void Setup_Comms_SPARC(SPARC_OBJ *pSPARC, MPI_Comm nuChi0Eigscomm, int nuChi0Eig
             assert(pSPARC->electronDens_in != NULL);
         }
 
-        // The following rho_in and phi_in are only used for evaluating QE scf errors
-        if (pSPARC->scf_err_type == 1) {
-            pSPARC->rho_dmcomm_phi_in = (double *)malloc(DMnd * sizeof(double));
-            assert(pSPARC->rho_dmcomm_phi_in != NULL);
-            pSPARC->phi_dmcomm_phi_in = (double *)malloc(DMnd * sizeof(double));
-            assert(pSPARC->phi_dmcomm_phi_in != NULL);
-        }
-
         // initialize electrostatic potential as random guess vector
         if (pSPARC->FixRandSeed == 1) {
             SeededRandVec(pSPARC->elecstPotential, pSPARC->DMVertices, gridsizes, -1.0, 1.0, 0);

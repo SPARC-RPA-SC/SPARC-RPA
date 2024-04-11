@@ -20,16 +20,18 @@
 #include "tools_RPA.h"
 
 void chebyshev_filtering_kpt(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int omegaIndex, double minEig, double maxEig, double lambdaCutoff, int chebyshevDegree, int flagNoDmcomm, int printFlag) {
+    if (flagNoDmcomm) return;
+    
     double e = (maxEig - lambdaCutoff) / 2.0;
     double c = (lambdaCutoff + maxEig) / 2.0;
     double sigma = e / (c - minEig);
     double sigmaNew;
     double tau = 2.0 / sigma;
     int nuChi0EigsAmount = pRPA->nNuChi0Eigscomm;
-    int totalLength = nuChi0EigsAmount * pSPARC->Nd_d;
+    int totalLength = nuChi0EigsAmount * pSPARC->Nd_d_dmcomm;
 
-    double _Complex *Xs = pRPA->deltaVs_kpt_phi;
-    double _Complex *Ys = pRPA->Ys_kpt_phi;
+    double _Complex *Xs = pRPA->deltaVs_kpt;
+    double _Complex *Ys = pRPA->Ys_kpt;
     double _Complex *Yt = (double _Complex*)calloc(sizeof(double _Complex), totalLength);
 
     nuChi0_mult_vectors_kpt(pSPARC, pRPA, qptIndex, omegaIndex, Xs, Ys, nuChi0EigsAmount, flagNoDmcomm);
@@ -50,11 +52,10 @@ void chebyshev_filtering_kpt(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int
     free(Yt);
 }
 
-void YT_multiply_Y_kpt(RPA_OBJ* pRPA, MPI_Comm dmcomm_phi, int DMnd, int Nspinor_eig, int printFlag) {
-    if (dmcomm_phi == MPI_COMM_NULL) return;
+void YT_multiply_Y_kpt(RPA_OBJ* pRPA, MPI_Comm dmcomm, int DMnd, int Nspinor_eig, int flagNoDmcomm, int printFlag) {
+    if (flagNoDmcomm) return;
 // #if defined(USE_MKL) || defined(USE_SCALAPACK)
-    int nproc_dmcomm_phi, rankWorld;
-    MPI_Comm_size(dmcomm_phi, &nproc_dmcomm_phi);
+    int rankWorld; // nproc_dmcomm_phi,
     MPI_Comm_rank(MPI_COMM_WORLD, &rankWorld);
     int size_blacscomm = pRPA->npnuChi0Neig;
 
@@ -67,21 +68,20 @@ void YT_multiply_Y_kpt(RPA_OBJ* pRPA, MPI_Comm dmcomm_phi, int DMnd, int Nspinor
     int ONE = 1;
 
     double _Complex alpha = 1.0, beta = 0.0;
-    double _Complex *Y = pRPA->Ys_kpt_phi;
+    double _Complex *Y = pRPA->Ys_kpt;
     // allocate memory for block cyclic format of the wavefunction
-    double _Complex *Y_BLCYC;
+    double _Complex *Y_BLCYC, *Y_BLCYC2;
     t3 = MPI_Wtime();
 
     t1 = MPI_Wtime();
+    Y_BLCYC = pRPA->Ys_kpt_BLCYC;
+    Y_BLCYC2 = (double _Complex*)malloc(pRPA->nr_orb_BLCYC * pRPA->nc_orb_BLCYC * sizeof(double _Complex));
     if (size_blacscomm > 1) {
-        Y_BLCYC = (double _Complex*)malloc(pRPA->nr_orb_BLCYC * pRPA->nc_orb_BLCYC * sizeof(double _Complex));
-        assert(Y_BLCYC != NULL);
         // distribute orbitals into block cyclic format
         pzgemr2d_(&DMndspe, &pRPA->nuChi0Neig, Y, &ONE, &ONE, pRPA->desc_orbitals,
                   Y_BLCYC, &ONE, &ONE, pRPA->desc_orb_BLCYC, &pRPA->ictxt_blacs); 
-    } else {
-        Y_BLCYC = pRPA->Ys_kpt_phi;
     }
+    memcpy(Y_BLCYC2, Y_BLCYC, pRPA->nr_orb_BLCYC * pRPA->nc_orb_BLCYC * sizeof(double _Complex));
     t2 = MPI_Wtime();  
     #ifdef DEBUG  
     if(!rankWorld) 
@@ -95,7 +95,7 @@ void YT_multiply_Y_kpt(RPA_OBJ* pRPA, MPI_Comm dmcomm_phi, int DMnd, int Nspinor
 #endif    
         // perform matrix multiplication using ScaLAPACK routines
         pzgemm_("C", "N", &pRPA->nuChi0Neig, &pRPA->nuChi0Neig, &DMndspe, &alpha, 
-                Y_BLCYC, &ONE, &ONE, pRPA->desc_orb_BLCYC,
+                Y_BLCYC2, &ONE, &ONE, pRPA->desc_orb_BLCYC,
                 Y_BLCYC, &ONE, &ONE, pRPA->desc_orb_BLCYC, &beta, pRPA->Mp_kpt, 
                 &ONE, &ONE, pRPA->desc_Mp_BLCYC);
     } else {
@@ -105,7 +105,7 @@ void YT_multiply_Y_kpt(RPA_OBJ* pRPA, MPI_Comm dmcomm_phi, int DMnd, int Nspinor
         cblas_zgemm(
             CblasColMajor, CblasConjTrans, CblasNoTrans,
             pRPA->nuChi0Neig, pRPA->nuChi0Neig, DMndspe,
-            &alpha, Y_BLCYC, DMndspe, Y_BLCYC, DMndspe, 
+            &alpha, Y_BLCYC2, DMndspe, Y_BLCYC, DMndspe, 
             &beta, pRPA->Mp_kpt, pRPA->nuChi0Neig
         );
     }
@@ -115,22 +115,13 @@ void YT_multiply_Y_kpt(RPA_OBJ* pRPA, MPI_Comm dmcomm_phi, int DMnd, int Nspinor
         printf("rank = %2d, YT'*Y in block cyclic format in each blacscomm took %.3f ms\n", 
                 rankWorld, (t2 - t1)*1e3); 
 #endif
-    t1 = MPI_Wtime();
-    if (nproc_dmcomm_phi > 1) {
-        // sum over all processors in dmcomm
-        MPI_Allreduce(MPI_IN_PLACE, pRPA->Mp_kpt, pRPA->nr_Mp_BLCYC*pRPA->nc_Mp_BLCYC, 
-                      MPI_DOUBLE_COMPLEX, MPI_SUM, dmcomm_phi);
-    }
-    t2 = MPI_Wtime();
     t4 = MPI_Wtime();
 #ifdef DEBUG
-    if(!rankWorld) printf("rank = %2d, Allreduce to sum YT'*Y over dmcomm took %.3f ms\n", 
-                     rankWorld, (t2 - t1)*1e3); 
     if(!rankWorld) printf("rank = %2d, Distribute data + matrix mult took %.3f ms\n", 
                      rankWorld, (t4 - t3)*1e3);
 #endif
     if (size_blacscomm > 1) {
-        free(Y_BLCYC);
+        free(Y_BLCYC2);
     }
 #ifdef DEBUG
     et = MPI_Wtime();
@@ -142,11 +133,10 @@ void Y_orth_kpt(SPARC_OBJ* pSPARC, RPA_OBJ* pRPA, int DMnd, int Nspinor_eig, int
 
 }
 
-void project_YT_nuChi0_Y_kpt(RPA_OBJ* pRPA, int qptIndex, int omegaIndex, int flagNoDmcomm, MPI_Comm dmcomm_phi, int DMnd, int Nspinor_eig, int isGammaPoint, int printFlag) {
-    if (dmcomm_phi == MPI_COMM_NULL) return;
+void project_YT_nuChi0_Y_kpt(RPA_OBJ* pRPA, MPI_Comm dmcomm, int DMnd, int Nspinor_eig, int flagNoDmcomm, int printFlag) {
+    if (flagNoDmcomm) return;
 // #if defined(USE_MKL) || defined(USE_SCALAPACK)
-    int nproc_dmcomm_phi, rankWorld;
-    MPI_Comm_size(dmcomm_phi, &nproc_dmcomm_phi);
+    int rankWorld; // nproc_dmcomm_phi,
     MPI_Comm_rank(MPI_COMM_WORLD, &rankWorld);
     int size_blacscomm = pRPA->npnuChi0Neig;
 
@@ -159,9 +149,9 @@ void project_YT_nuChi0_Y_kpt(RPA_OBJ* pRPA, int qptIndex, int omegaIndex, int fl
     int ONE = 1;
 
     double _Complex alpha = 1.0, beta = 0.0;
-    double _Complex *HY = pRPA->deltaVs_kpt_phi;
+    double _Complex *HY = pRPA->deltaVs_kpt;
     // allocate memory for block cyclic format of the wavefunction
-    double _Complex *Y_BLCYC = pRPA->Ys_kpt_phi_BLCYC;
+    double _Complex *Y_BLCYC = pRPA->Ys_kpt_BLCYC;
 
     double _Complex *HY_BLCYC;
     t1 = MPI_Wtime();
@@ -196,12 +186,6 @@ void project_YT_nuChi0_Y_kpt(RPA_OBJ* pRPA, int qptIndex, int omegaIndex, int fl
         );
     }
 
-    if (nproc_dmcomm_phi > 1) {
-        // sum over all processors in dmcomm
-        MPI_Allreduce(MPI_IN_PLACE, pRPA->Hp_kpt, pRPA->nr_Hp_BLCYC*pRPA->nc_Hp_BLCYC, 
-                      MPI_DOUBLE_COMPLEX, MPI_SUM, dmcomm_phi);
-    }
-
     t2 = MPI_Wtime();
 #ifdef DEBUG
     if(!rankWorld) printf("global rank = %2d, finding Y'*HY took %.3f ms\n",rankWorld,(t2-t1)*1e3); 
@@ -217,10 +201,14 @@ void project_YT_nuChi0_Y_kpt(RPA_OBJ* pRPA, int qptIndex, int omegaIndex, int fl
 // // #endif // #if defined(USE_MKL) || defined(USE_SCALAPACK)
 }
 
-void generalized_eigenproblem_solver_kpt(RPA_OBJ* pRPA, MPI_Comm dmcomm_phi, MPI_Comm blacsComm, int blksz, int *signImag, int printFlag) {
+void generalized_eigenproblem_solver_kpt(RPA_OBJ* pRPA, MPI_Comm dmcomm, MPI_Comm blacsComm, int blksz, int *signImag, int printFlag) {
 
 }
 
-void subspace_rotation_unify_eigVecs_kpt(SPARC_OBJ* pSPARC, RPA_OBJ* pRPA, MPI_Comm dmcomm_phi, int DMnd, int Nspinor_eig, double *rotatedEigVecs, int printFlag) {
+void subspace_rotation_unify_eigVecs_kpt(SPARC_OBJ* pSPARC, RPA_OBJ* pRPA, MPI_Comm dmcomm, int DMnd, int Nspinor_eig, double *rotatedEigVecs, int printFlag) {
 
+}
+
+double evaluate_cheFSI_error_kpt(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int omegaIndex, int flagNoDmcomm) {
+    return 0.0;
 }

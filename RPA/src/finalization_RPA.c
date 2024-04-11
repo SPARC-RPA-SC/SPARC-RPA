@@ -5,6 +5,7 @@
 
 #include "main.h"
 #include "finalization.h"
+#include "kroneckerLaplacian.h"
 
 void finalize_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA) {
     
@@ -32,6 +33,7 @@ void finalize_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA) {
     free(pRPA->omegaWts);
     // free eigs
     free(pRPA->RRnuChi0Eigs);
+    free(pRPA->RRoriginSeqEigs);
     free(pRPA->RRnuChi0EigVecs);
     free(pRPA->ErpaTerms);
     // free communicators
@@ -48,16 +50,10 @@ void finalize_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA) {
         free(pRPA->Q_kpt);
     }
     if (pRPA->nuChi0EigscommIndex != -1) {
-        if (pSPARC->dmcomm_phi != MPI_COMM_NULL) {
-            if (pSPARC->isGammaPoint) {
-                free(pRPA->deltaRhos_phi);
-                free(pRPA->deltaVs_phi);
-                free(pRPA->Ys_phi);
-            } else {
-                free(pRPA->deltaRhos_kpt_phi);
-                free(pRPA->deltaVs_kpt_phi);
-                free(pRPA->Ys_kpt_phi);
-            }
+        if (pSPARC->isGammaPoint) {
+            free(pRPA->deltaVs);
+        } else {
+            free(pRPA->deltaVs_kpt);
         }
         int flagNoDmcomm = (pSPARC->spincomm_index < 0 || pSPARC->kptcomm_index < 0 || pSPARC->bandcomm_index < 0 || pSPARC->dmcomm == MPI_COMM_NULL);
         if (!flagNoDmcomm) {
@@ -67,13 +63,27 @@ void finalize_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA) {
                 free(pRPA->neighborBandsGamma);
                 free(pRPA->allEpsilonsGamma);
                 free(pRPA->deltaRhos);
-                free(pRPA->deltaVs);
+                free(pRPA->sprtNuDeltaVs);
+                free(pRPA->Ys);
                 free(pRPA->deltaPsisReal);
                 free(pRPA->deltaPsisImag);
+
+                free(pSPARC->pois_const);
+                free_kron_Lap(pSPARC->kron_lap_exx);
+                free(pSPARC->kron_lap_exx);
+                if (pRPA->flagCOCGinitial) {
+                    free(pRPA->allXorb);
+                    free(pRPA->allLambdas);
+                }
             } else {
                 free(pRPA->deltaRhos_kpt);
-                free(pRPA->deltaVs_kpt);
+                free(pRPA->sprtNuDeltaVs_kpt);
+                free(pRPA->Ys_kpt);
                 free(pRPA->deltaPsis_kpt);
+                if (pRPA->flagCOCGinitial) {
+                    free(pRPA->allXorb_kpt);
+                    free(pRPA->allLambdas);
+                }
             }
         }
         Free_scfvar(pSPARC);

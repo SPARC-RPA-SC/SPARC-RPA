@@ -22,167 +22,24 @@ void initialize_deltaVs(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA) {
     int nuChi0EigscommIndex = pRPA->nuChi0EigscommIndex;
     if (nuChi0EigscommIndex == -1)
         return;
+    int flagNoDmcomm = (pSPARC->spincomm_index < 0 || pSPARC->kptcomm_index < 0 || pSPARC->bandcomm_index < 0 || pSPARC->dmcomm == MPI_COMM_NULL);
+    if (flagNoDmcomm) return;
     int gridsizes[3] = {pSPARC->Nx, pSPARC->Ny, pSPARC->Nz};
     int Nd = pSPARC->Nx * pSPARC->Ny * pSPARC->Nz;
     int seed_offset = 0;
     double vec2norm = 0.0;
     if (pSPARC->isGammaPoint) {
         for (int i = 0; i < pRPA->nNuChi0Eigscomm; i++) {
-            if (pSPARC->dmcomm_phi != MPI_COMM_NULL) {
-                SeededRandVec(pRPA->deltaVs_phi + i*pSPARC->Nd_d, pSPARC->DMVertices, gridsizes, -0.5, 0.5, seed_offset + Nd * (pRPA->nuChi0EigsStartIndex + i)); // deltaVs vectors are not normalized.
-                Vector2Norm(pRPA->deltaVs_phi + i*pSPARC->Nd_d, pSPARC->Nd_d, &vec2norm, pSPARC->dmcomm_phi);
-                VectorScale(pRPA->deltaVs_phi + i*pSPARC->Nd_d, pSPARC->Nd_d, 1.0/vec2norm, pSPARC->dmcomm_phi); // unify the length of \Delta V
-            }
+                SeededRandVec(pRPA->deltaVs + i*pSPARC->Nd_d_dmcomm, pSPARC->DMVertices_dmcomm, gridsizes, -0.5, 0.5, seed_offset + Nd * (pRPA->nuChi0EigsStartIndex + i)); // deltaVs vectors are not normalized.
+                Vector2Norm(pRPA->deltaVs + i*pSPARC->Nd_d_dmcomm, pSPARC->Nd_d_dmcomm, &vec2norm, pSPARC->dmcomm);
+                VectorScale(pRPA->deltaVs + i*pSPARC->Nd_d_dmcomm, pSPARC->Nd_d_dmcomm, 1.0/vec2norm, pSPARC->dmcomm); // unify the length of \Delta V
         }
     }
     else {
         for (int i = 0; i < pRPA->nNuChi0Eigscomm; i++) {
-            if (pSPARC->dmcomm_phi != MPI_COMM_NULL) {
-                SeededRandVec_complex(pRPA->deltaVs_kpt_phi + i*pSPARC->Nd_d, pSPARC->DMVertices, gridsizes, -0.5, 0.5, seed_offset + Nd * (pRPA->nuChi0EigsStartIndex + i)); // deltaVs vectors are not normalized.
-                Vector2Norm_complex(pRPA->deltaVs_kpt_phi + i*pSPARC->Nd_d, pSPARC->Nd_d, &vec2norm, pSPARC->dmcomm_phi);
-                VectorScaleComplex(pRPA->deltaVs_kpt_phi + i*pSPARC->Nd_d, pSPARC->Nd_d, 1.0/vec2norm, pSPARC->dmcomm_phi); // unify the length of \Delta V
-            }
-        }
-    }
-}
-
-void test_Hx_nuChi0(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA) {
-    int nuChi0EigscommIndex = pRPA->nuChi0EigscommIndex;
-    if (nuChi0EigscommIndex == -1)
-        return;
-    MPI_Comm nuChi0Eigscomm = pRPA->nuChi0Eigscomm;
-    int rank;
-    MPI_Comm_rank(nuChi0Eigscomm, &rank);
-
-    int flagNoDmcomm = (pSPARC->spincomm_index < 0 || pSPARC->kptcomm_index < 0 || pSPARC->bandcomm_index < 0 || pSPARC->dmcomm == MPI_COMM_NULL);
-
-    if (!flagNoDmcomm) {
-        double *testHxAccuracy = (double *)calloc(sizeof(double), pSPARC->Nkpts_kptcomm * pSPARC->Nspin_spincomm * pSPARC->Nband_bandcomm);
-        test_Hx(pSPARC, testHxAccuracy);
-        if ((nuChi0EigscommIndex == pRPA->npnuChi0Neig - 1) && (pSPARC->Nband_bandcomm > 0)) {
-            printf("rank %d in nuChi0Eigscomm %d, the relative error epsilon*psi - H*psi of the bands %d %d are %.6E %.6E\n", rank, nuChi0EigscommIndex,
-                   pSPARC->band_start_indx, pSPARC->band_start_indx + 1, testHxAccuracy[0], testHxAccuracy[1]);
-        }
-        free(testHxAccuracy);
-    }
-
-    if (nuChi0EigscommIndex == pRPA->npnuChi0Neig - 1) { // this test is done in only one nuChi0Eigscomm
-        int printFlag = 1;
-        int qptIndex = 1;
-        int omegaIndex = 0;
-        int nuChi0EigsAmount = 1;// pRPA->nNuChi0Eigscomm;
-        if (qptIndex > pRPA->Nqpts_sym - 1)
-            qptIndex = pRPA->Nqpts_sym - 1;
-        if (omegaIndex > pRPA->Nomega - 1)
-            omegaIndex = pRPA->Nomega - 1;
-        int Nd_d_dmcomm = pSPARC->Nd_d_dmcomm;
-        if (pSPARC->isGammaPoint) {
-            for (int nuChi0EigIndex = 0; nuChi0EigIndex < nuChi0EigsAmount; nuChi0EigIndex++) {
-                Transfer_Veff_loc_RPA(pSPARC, pRPA->nuChi0Eigscomm, pRPA->deltaVs_phi + nuChi0EigIndex*pSPARC->Nd_d, pRPA->deltaVs + nuChi0EigIndex*pSPARC->Nd_d_dmcomm); // it tansfer \Delta V at here
-            }
-            if ((pRPA->nuChi0EigscommIndex == pRPA->npnuChi0Neig - 1) && (pSPARC->spincomm_index == 0) && (pSPARC->bandcomm_index == 0) && (pSPARC->dmcomm != MPI_COMM_NULL)) { // print all \Delta V vectors of the last nuChi0Eigscomm.
-                // the code is only for cases without domain parallelization. In the case with domain parallelization, it needs to be modified by parallel output
-                // only one processor print
-                int dmcommRank;
-                MPI_Comm_rank(pSPARC->dmcomm, &dmcommRank);
-                if (dmcommRank == 0) {
-                    FILE *output1stDV = fopen("deltaVs.txt", "w");
-                    if (output1stDV ==  NULL) {
-                        printf("error printing delta Vs in test\n");
-                        exit(EXIT_FAILURE);
-                    } else {
-                        for (int nuChi0EigIndex = 0; nuChi0EigIndex < nuChi0EigsAmount; nuChi0EigIndex++) {
-                            for (int index = 0; index < Nd_d_dmcomm; index++) {
-                                fprintf(output1stDV, "%12.9f\n", pRPA->deltaVs[nuChi0EigIndex*Nd_d_dmcomm + index]);
-                            }
-                            fprintf(output1stDV, "\n");
-                        }
-                    }
-                    fclose(output1stDV);
-                }
-            }
-            if (!flagNoDmcomm) {
-                sternheimer_eq_gamma(pSPARC, pRPA, omegaIndex, nuChi0EigsAmount, printFlag);
-            }
-            collect_transfer_deltaRho_gamma(pSPARC, pRPA->deltaRhos, pRPA->deltaRhos_phi, nuChi0EigsAmount, printFlag, pRPA->nuChi0Eigscomm);
-            Calculate_deltaRhoPotential_gamma(pSPARC, pRPA->deltaRhos_phi, pRPA->deltaVs_phi, nuChi0EigsAmount, printFlag, pRPA->deltaVs, pRPA->nuChi0EigscommIndex, pRPA->nuChi0Eigscomm);
-        } else {
-            for (int nuChi0EigIndex = 0; nuChi0EigIndex < nuChi0EigsAmount; nuChi0EigIndex++) {
-                Transfer_Veff_loc_RPA_kpt(pSPARC, pRPA->nuChi0Eigscomm, pRPA->deltaVs_kpt_phi + nuChi0EigIndex*pSPARC->Nd_d, pRPA->deltaVs_kpt + nuChi0EigIndex*pSPARC->Nd_d_dmcomm); // it tansfer \Delta V at here
-            }
-            if ((pRPA->nuChi0EigscommIndex == pRPA->npnuChi0Neig - 1) && (pSPARC->spincomm_index == 0) && (pSPARC->kptcomm_index == 0) && (pSPARC->bandcomm_index == 0) && (pSPARC->dmcomm != MPI_COMM_NULL)) { // print the first \Delta V vector of the last nuChi0Eigscomm.
-                // the code is only for cases without domain parallelization. In the case with domain parallelization, it needs to be modified by parallel output
-                // only one processor print
-                int dmcommRank;
-                MPI_Comm_rank(pSPARC->dmcomm, &dmcommRank);
-                if (dmcommRank == 0) {
-                    FILE *output1stDV = fopen("deltaVs_kpt.txt", "w");
-                    if (output1stDV ==  NULL) {
-                        printf("error printing delta Vs in test\n");
-                        exit(EXIT_FAILURE);
-                    } else {
-                        for (int nuChi0EigIndex = 0; nuChi0EigIndex < nuChi0EigsAmount; nuChi0EigIndex++) {
-                            for (int index = 0; index < Nd_d_dmcomm; index++) {
-                                fprintf(output1stDV, "%12.9f %12.9f\n", creal(pRPA->deltaVs_kpt[nuChi0EigIndex*Nd_d_dmcomm + index]), cimag(pRPA->deltaVs_kpt[nuChi0EigIndex*Nd_d_dmcomm + index]));
-                            }
-                            fprintf(output1stDV, "\n");
-                        }
-                    }
-                    fclose(output1stDV);
-                }
-            }
-            if (!flagNoDmcomm) {
-                sternheimer_eq_kpt(pSPARC, pRPA, qptIndex, omegaIndex, nuChi0EigsAmount, printFlag);
-            }
-            collect_transfer_deltaRho_kpt(pSPARC, pRPA->deltaRhos_kpt, pRPA->deltaRhos_kpt_phi, nuChi0EigsAmount, printFlag, pRPA->nuChi0Eigscomm);
-            double qptx = pRPA->q1[qptIndex]; double qpty = pRPA->q2[qptIndex]; double qptz = pRPA->q3[qptIndex];
-            Calculate_deltaRhoPotential_kpt(pSPARC, pRPA->deltaRhos_kpt_phi, pRPA->deltaVs_kpt_phi, qptx, qpty, qptz, nuChi0EigsAmount, printFlag, pRPA->nuChi0EigscommIndex, pRPA->nuChi0Eigscomm);
-        }
-    }
-}
-
-void test_Hx(SPARC_OBJ *pSPARC, double *testHxAccuracy)
-{
-    int DMnd = pSPARC->Nd_d_dmcomm;
-    int DMndsp = DMnd * pSPARC->Nspinor_spincomm;
-    int *DMVertices = pSPARC->DMVertices_dmcomm;
-    int ncol = pSPARC->Nband_bandcomm;
-    int Nkpts_kptcomm = pSPARC->Nkpts_kptcomm;
-    MPI_Comm comm = pSPARC->dmcomm;
-    if (pSPARC->isGammaPoint) { // follow the sequence in function Calculate_elecDens, divide gamma-point, k-point first
-        for (int spn_i = 0; spn_i < pSPARC->Nspin_spincomm; spn_i++) { // follow the sequence in function eigSolve_CheFSI, divide spin
-            int sg = pSPARC->spin_start_indx + spn_i;
-            Hamiltonian_vectors_mult(
-                pSPARC, DMnd, DMVertices, pSPARC->Veff_loc_dmcomm + sg * pSPARC->Nd_d_dmcomm,
-                pSPARC->Atom_Influence_nloc, pSPARC->nlocProj, ncol, 0, pSPARC->Xorb + spn_i * DMnd, DMndsp, pSPARC->Yorb + spn_i * DMnd, DMndsp, spn_i, comm);
-            for (int bandIndex = 0; bandIndex < ncol; bandIndex++) { // verify the correctness of psi
-                double *psi = pSPARC->Xorb + bandIndex * DMndsp + spn_i * DMnd;
-                double *Hpsi = pSPARC->Yorb + bandIndex * DMndsp + spn_i * DMnd;
-                double eigValue = pSPARC->lambda[spn_i * ncol + bandIndex];
-                for (int i = 0; i < DMnd; i++)
-                {
-                    testHxAccuracy[spn_i * ncol + bandIndex] += (*(psi + i) * eigValue - *(Hpsi + i)) * (*(psi + i) * eigValue - *(Hpsi + i));
-                }
-            }
-        }
-    }
-    else {
-        int size_k = DMndsp * pSPARC->Nband_bandcomm;
-        for (int spn_i = 0; spn_i < pSPARC->Nspin_spincomm; spn_i++) { // follow the sequence in function eigSolve_CheFSI_kpt
-            int sg = pSPARC->spin_start_indx + spn_i;
-            for (int kpt = 0; kpt < Nkpts_kptcomm; kpt++) {
-                Hamiltonian_vectors_mult_kpt(
-                    pSPARC, DMnd, DMVertices, pSPARC->Veff_loc_dmcomm + sg * pSPARC->Nd_d_dmcomm,
-                    pSPARC->Atom_Influence_nloc, pSPARC->nlocProj, ncol, 0, pSPARC->Xorb_kpt + kpt * size_k + spn_i * DMnd, DMndsp, pSPARC->Yorb_kpt + spn_i * DMnd, DMndsp, spn_i, kpt, comm);
-                for (int bandIndex = 0; bandIndex < ncol; bandIndex++) { // verify the correctness of psi
-                    double _Complex *psi = pSPARC->Xorb_kpt + kpt * size_k + bandIndex * DMndsp + spn_i * DMnd;
-                    double _Complex *Hpsi = pSPARC->Yorb_kpt + bandIndex * DMndsp + spn_i * DMnd;
-                    double eigValue = pSPARC->lambda[spn_i * Nkpts_kptcomm * ncol + kpt * ncol + bandIndex];
-                    for (int i = 0; i < DMnd; i++) {
-                        testHxAccuracy[spn_i * Nkpts_kptcomm * ncol + kpt * ncol + bandIndex] += creal(conj(*(psi + i) * eigValue - *(Hpsi + i)) * (*(psi + i) * eigValue - *(Hpsi + i)));
-                    }
-                }
-            }
+                SeededRandVec_complex(pRPA->deltaVs_kpt + i*pSPARC->Nd_d_dmcomm, pSPARC->DMVertices_dmcomm, gridsizes, -0.5, 0.5, seed_offset + Nd * (pRPA->nuChi0EigsStartIndex + i)); // deltaVs vectors are not normalized.
+                Vector2Norm_complex(pRPA->deltaVs_kpt + i*pSPARC->Nd_d_dmcomm, pSPARC->Nd_d_dmcomm, &vec2norm, pSPARC->dmcomm);
+                VectorScaleComplex(pRPA->deltaVs_kpt + i*pSPARC->Nd_d_dmcomm, pSPARC->Nd_d_dmcomm, 1.0/vec2norm, pSPARC->dmcomm); // unify the length of \Delta V
         }
     }
 }
@@ -199,18 +56,62 @@ void cheFSI_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int omegaIndex) 
     MPI_Comm nuChi0Eigscomm = pRPA->nuChi0Eigscomm;
     int rank;
     MPI_Comm_rank(nuChi0Eigscomm, &rank);
-    int outputEigAmount = (pRPA->nuChi0Neig > 5) ? 5 : pRPA->nuChi0Neig;
+    int outputFirstEigAmount = (pRPA->nuChi0Neig > 2) ? 2 : pRPA->nuChi0Neig;
+    int outputLastEigAmount = (pRPA->nuChi0Neig > 2) ? 2 : pRPA->nuChi0Neig;
     if ((!pRPA->nuChi0EigscommIndex) && (!rank)) {
         FILE *output_fp = fopen(pRPA->filename_out,"a");
         fprintf(output_fp,"***************************************************************************\n");
         fprintf(output_fp,"q-point %d (reduced coords %.3f %.3f %.3f), weight %.3f\n omega %d (value %.3f, 0~1 value %.3f, weight %.3f)\n",
             qptIndex + 1, pRPA->q1[qptIndex]*pSPARC->range_x/(2*M_PI), pRPA->q2[qptIndex]*pSPARC->range_y/(2*M_PI), pRPA->q3[qptIndex]*pSPARC->range_z/(2*M_PI), pRPA->qptWts[qptIndex],
             omegaIndex + 1, pRPA->omega[omegaIndex], pRPA->omega01[omegaIndex], pRPA->omegaWts[omegaIndex]);
-        fprintf(output_fp,"ncheb | ErpaTerm (Ha)|       First %d eigenvalues of nu chi0        | Timing (s)\n", outputEigAmount);
+        fprintf(output_fp,"ncheb|ErpaTerm(Ha/atom)|First %d eigs & Last %d eigs of nu chi0|eig Error|Timing (s)\n", outputFirstEigAmount, outputLastEigAmount);
         fclose(output_fp);
     }
 
     int flagNoDmcomm = (pSPARC->spincomm_index < 0 || pSPARC->kptcomm_index < 0 || pSPARC->bandcomm_index < 0 || pSPARC->dmcomm == MPI_COMM_NULL);
+
+    if (pRPA->flagCOCGinitial && (!flagNoDmcomm)) {
+        if (pSPARC->isGammaPoint) {
+            collect_allXorb_allLambdas_gamma(pSPARC, pRPA);
+        } else {
+            collect_allXorb_allLambdas_kpt(pSPARC, pRPA, qptIndex);
+        }
+    }
+
+    double tolRelEigError = pRPA->tol_EigConverge[omegaIndex];
+    double iniErrorTime = 0.0, t1 = 0.0, t2 = 0.0;
+    double ErpaTerm = 1000.0;
+    double qptOmegaWeight = pRPA->qptWts[qptIndex] * pRPA->omegaWts[omegaIndex];
+    t1 = MPI_Wtime();
+    double initialError = estimate_initialError(pSPARC, pRPA, qptIndex, omegaIndex, flagNoDmcomm); // compute a initial Erpa by projecting the operator on eigenvectors of the previous omega operator
+    printf("qpt %d, omega %d, initial relative eig error %.3E, tolRelEigError %.3E\n", qptIndex, omegaIndex, initialError, tolRelEigError);
+    t2 = MPI_Wtime();
+    iniErrorTime = t2 - t1;
+    #ifdef DEBUG
+    if ((!rank) && (!nuChi0EigscommIndex)) {
+        printf("omega %d, estimate_initialError spent %.2E ms.\n", omegaIndex, iniErrorTime);
+    }
+    #endif
+    if (initialError < tolRelEigError) { // if the initial eigenvectors are very good, then no need to do Chebyshev filtering!
+        if ((!pRPA->nuChi0EigscommIndex) && (!rank)) {
+            ErpaTerm = compute_ErpaTerm(pRPA->RRnuChi0Eigs, pRPA->nuChi0Neig, pRPA->omega01[omegaIndex], qptOmegaWeight);
+            FILE *output_fp = fopen(pRPA->filename_out,"a");
+            fprintf(output_fp,"% 3d     %.3E    ", 0, ErpaTerm / (double)pSPARC->n_atom);
+            for (int eigIndex = 0; eigIndex < outputFirstEigAmount; eigIndex++) {
+                fprintf(output_fp, "%.5f ", pRPA->RRnuChi0Eigs[eigIndex]);
+            }
+            fprintf(output_fp, "; ");
+            for (int eigIndex = pRPA->nuChi0Neig - outputLastEigAmount; eigIndex < pRPA->nuChi0Neig; eigIndex++) {
+                fprintf(output_fp, "%.5f ", pRPA->RRnuChi0Eigs[eigIndex]);
+            }
+            fprintf(output_fp, " %.3E %.2f\n", initialError, iniErrorTime);
+            fclose(output_fp);
+        }
+        pRPA->ErpaTerms[qptIndex*pRPA->Nomega + omegaIndex] = ErpaTerm;
+        return;
+    }
+
+    t1 = MPI_Wtime();
     double minEig = 0.0;
     if (!nuChi0EigscommIndex) {
         minEig = find_min_eigenvalue(pSPARC, pRPA, qptIndex, omegaIndex, flagNoDmcomm);
@@ -218,14 +119,23 @@ void cheFSI_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int omegaIndex) 
     MPI_Bcast(&minEig, 1, MPI_DOUBLE, 0, pRPA->nuChi0EigsBridgeComm);
     double maxEig = -minEig;
     double lambdaCutoff = 0.0;
-    double qptOmegaWeight = pRPA->qptWts[qptIndex] * pRPA->omegaWts[omegaIndex];
-    double tolErpaTermConverge = pRPA->tol_ErpaConverge * qptOmegaWeight;
+    t2 = MPI_Wtime();
+    double minEigValueTime = t2 - t1;
+    #ifdef DEBUG
+    if ((!rank) && (!nuChi0EigscommIndex)) {
+        printf("omega %d, find_min_eigenvalue spent %.2E ms.\n", omegaIndex + 1, minEigValueTime);
+    }
+    #endif
+    
+    // double tolErpaTermConverge = pRPA->tol_ErpaConverge * qptOmegaWeight;
     int flagCheb = 1;
     int ncheb = 0;
     int signImag = 0;
     int chebyshevDegree = pRPA->ChebDegreeRPA;
-    int printFlag = 1;
-    double ErpaTerm = 1000.0, lastErpaTerm = 0.0, t1 = 0.0, t2 = 0.0;
+    int printFlag = 1; // for midvariables output
+    double error = 0.0;
+    double t3, t4;
+    double sumFilteringTime = 0.0, sumYT_mul_YTime = 0.0, sumYT_operator_YTime = 0.0, sumEigTime = 0.0, sumRotationTime = 0.0, sumEvaluateErrTime = 0.0;
     while (flagCheb) {
         t1 = MPI_Wtime();
         if (ncheb) {
@@ -234,54 +144,121 @@ void cheFSI_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int omegaIndex) 
             lambdaCutoff = pRPA->RRnuChi0Eigs[pRPA->nuChi0Neig - 1] + 1e-4;
         }
         if (pSPARC->isGammaPoint) {
-            chebyshev_filtering_gamma(pSPARC, pRPA, omegaIndex, minEig, maxEig, lambdaCutoff, chebyshevDegree, flagNoDmcomm, printFlag);
+            #ifdef DEBUG
+            t3 = MPI_Wtime();
+            #endif
+            chebyshev_filtering_gamma(pSPARC, pRPA, omegaIndex, minEig, maxEig, lambdaCutoff, chebyshevDegree, flagNoDmcomm, ncheb, printFlag);
+            #ifdef DEBUG
+            t4 = MPI_Wtime();
+            sumFilteringTime += t4 - t3;
+            if ((!rank) && (!nuChi0EigscommIndex)) {
+                printf("omega %d, subspace iteration %d, chebyshev_filtering spent %.2E ms.\n", omegaIndex + 1, ncheb + 1, (t4 - t3)*1e3);
+            }
+            #endif
             if (pRPA->npnuChi0Neig > 1) {
-                pRPA->Ys_phi_BLCYC = (double *)malloc(pRPA->nr_orb_BLCYC * pRPA->nc_orb_BLCYC * sizeof(double));
+                pRPA->Ys_BLCYC = (double *)malloc(pRPA->nr_orb_BLCYC * pRPA->nc_orb_BLCYC * sizeof(double));
             } else {
-                pRPA->Ys_phi_BLCYC = pRPA->Ys_phi;
+                pRPA->Ys_BLCYC = pRPA->Ys;
             }
-            YT_multiply_Y_gamma(pRPA, pSPARC->dmcomm_phi, pSPARC->Nd_d, pSPARC->Nspinor_eig, printFlag);
-            if (!pRPA->eig_useLAPACK) { // if we use ScaLapack, not Lapack, to solve eigenpairs of YT*\nu\Chi0*Y, we have to orthogonalize Y
-                // because ScaLapack does not support solving AX = BX\Lambda with non-symmetric A or B
-                Y_orth_gamma(pSPARC, pRPA, pSPARC->Nd_d, pSPARC->Nspinor_eig, printFlag);
+            #ifdef DEBUG
+            t3 = MPI_Wtime();
+            #endif
+            YT_multiply_Y_gamma(pRPA, pSPARC->dmcomm, pRPA->Ys, pSPARC->Nd_d_dmcomm, pSPARC->Nspinor_eig, flagNoDmcomm, printFlag);
+            #ifdef DEBUG
+            t4 = MPI_Wtime();
+            sumYT_mul_YTime += t4 - t3;
+            if ((!rank) && (!nuChi0EigscommIndex)) {
+                printf("omega %d, subspace iteration %d, YT_multiply_Y spent %.2E ms.\n", omegaIndex + 1, ncheb + 1, (t4 - t3)*1e3);
             }
-            nuChi0_mult_vectors_gamma(pSPARC, pRPA, omegaIndex, pRPA->Ys_phi, pRPA->deltaVs_phi, pRPA->nNuChi0Eigscomm, flagNoDmcomm); // deltaVs_phi = (\nu\chi0)*Ys_phi for saving memory
-            project_YT_nuChi0_Y_gamma(pRPA, pSPARC->dmcomm_phi, pSPARC->Nd_d, pSPARC->Nspinor_eig, printFlag);
-            generalized_eigenproblem_solver_gamma(pRPA, pSPARC->dmcomm_phi, pRPA->nuChi0BlacsComm, 10, &signImag, printFlag); // pSPARC->eig_paral_blksz
-            if (signImag > 0) printf("WARNING: omega %d found eigenvalue has large imag part.\n", omegaIndex);
-            subspace_rotation_unify_eigVecs_gamma(pSPARC, pRPA, pSPARC->dmcomm_phi, pSPARC->Nd_d, pSPARC->Nspinor_eig,  pRPA->deltaVs_phi, printFlag);
+            t3 = MPI_Wtime();
+            #endif
+            // if (!pRPA->eig_useLAPACK) { // if we use ScaLapack, not Lapack, to solve eigenpairs of YT*\nu\Chi0*Y, we have to orthogonalize Y
+            //     // because ScaLapack does not support solving AX = BX\Lambda with non-symmetric A or B
+            //     Y_orth_gamma(pSPARC, pRPA, pSPARC->Nd_d_dmcomm, pSPARC->Nspinor_eig, flagNoDmcomm, printFlag);
+            // }
+            nuChi0_mult_vectors_gamma(pSPARC, pRPA, omegaIndex, pRPA->Ys, pRPA->deltaVs, pRPA->nNuChi0Eigscomm, flagNoDmcomm, printFlag); // deltaVs = (\nu\chi0)*Ys for saving memory
+            #ifdef DEBUG
+            t4 = MPI_Wtime();
+            sumYT_operator_YTime += t4 - t3;
+            if ((!rank) && (!nuChi0EigscommIndex)) {
+                printf("omega %d, subspace iteration %d, nu^0.5 chi0 nu^0.5 multiplying Ys spent %.2E ms.\n", omegaIndex + 1, ncheb + 1, (t4 - t3)*1e3);
+            }
+            #endif
+            if (!pRPA->nuChi0EigsBridgeCommIndex) {
+                #ifdef DEBUG
+                t3 = MPI_Wtime();
+                #endif
+                project_YT_nuChi0_Y_gamma(pRPA, pSPARC->dmcomm, pRPA->Ys_BLCYC, pRPA->deltaVs, pSPARC->Nd_d_dmcomm, pSPARC->Nspinor_eig, flagNoDmcomm, printFlag);
+                #ifdef DEBUG
+                t4 = MPI_Wtime();
+                sumYT_operator_YTime += t4 - t3;
+                if ((!rank) && (!nuChi0EigscommIndex)) {
+                    printf("omega %d, subspace iteration %d, project_YT_operator_Y spent %.2E ms.\n", omegaIndex + 1, ncheb + 1, (t4 - t3)*1e3);
+                }
+                t3 = MPI_Wtime();
+                #endif
+                generalized_eigenproblem_solver_gamma(pRPA, pSPARC->dmcomm, pRPA->nuChi0BlacsComm, pSPARC->eig_paral_blksz, flagNoDmcomm, printFlag); // pSPARC->eig_paral_blksz
+                #ifdef DEBUG
+                t4 = MPI_Wtime();
+                sumEigTime += t4 - t3;
+                if ((!rank) && (!nuChi0EigscommIndex)) {
+                    printf("omega %d, subspace iteration %d, generalized_eigenproblem_solver spent %.2E ms.\n", omegaIndex + 1, ncheb + 1, (t4 - t3)*1e3);
+                }
+                t3 = MPI_Wtime();
+                #endif
+                subspace_rotation_unify_eigVecs_gamma(pSPARC, pRPA, pSPARC->dmcomm, pSPARC->Nd_d_dmcomm, pSPARC->Nspinor_eig, pRPA->deltaVs, flagNoDmcomm, printFlag);
+                #ifdef DEBUG
+                t4 = MPI_Wtime();
+                sumRotationTime += t4 - t3;
+                if ((!rank) && (!nuChi0EigscommIndex)) {
+                    printf("omega %d, subspace iteration %d, subspace_rotation spent %.2E ms.\n", omegaIndex + 1, ncheb + 1, (t4 - t3)*1e3);
+                }
+                #endif
+                MPI_Bcast(pRPA->RRnuChi0Eigs, pRPA->nuChi0Neig, MPI_DOUBLE, 0, pRPA->nuChi0BlacsComm);
+            }
+            MPI_Bcast(pRPA->RRnuChi0Eigs, pRPA->nuChi0Neig, MPI_DOUBLE, 0, pRPA->nuChi0Eigscomm);
+            MPI_Bcast(pRPA->deltaVs, pSPARC->Nd * pRPA->nNuChi0Eigscomm, MPI_DOUBLE, 0, pRPA->nuChi0Eigscomm);
+            #ifdef DEBUG
+            t3 = MPI_Wtime();
+            #endif
+            error = evaluate_cheFSI_error_gamma(pSPARC, pRPA, omegaIndex, flagNoDmcomm);
+            #ifdef DEBUG
+            t4 = MPI_Wtime();
+            sumEvaluateErrTime += t4 - t3;
+            #endif
             if (pRPA->npnuChi0Neig > 1) {
-                free(pRPA->Ys_phi_BLCYC);
+                free(pRPA->Ys_BLCYC);
             }
         } else {
             chebyshev_filtering_kpt(pSPARC, pRPA, qptIndex, omegaIndex, minEig, maxEig, lambdaCutoff, chebyshevDegree, flagNoDmcomm, printFlag);
             if (pRPA->npnuChi0Neig > 1) {
-                pRPA->Ys_kpt_phi_BLCYC = (double _Complex*)malloc(pRPA->nr_orb_BLCYC * pRPA->nc_orb_BLCYC * sizeof(double));
+                pRPA->Ys_kpt_BLCYC = (double _Complex*)malloc(pRPA->nr_orb_BLCYC * pRPA->nc_orb_BLCYC * sizeof(double _Complex));
             } else {
-                pRPA->Ys_kpt_phi_BLCYC = pRPA->Ys_kpt_phi;
+                pRPA->Ys_kpt_BLCYC = pRPA->Ys_kpt;
             }
-            YT_multiply_Y_kpt(pRPA, pSPARC->dmcomm_phi, pSPARC->Nd_d, pSPARC->Nspinor_eig, printFlag);
+            YT_multiply_Y_kpt(pRPA, pSPARC->dmcomm, pSPARC->Nd_d_dmcomm, pSPARC->Nspinor_eig, flagNoDmcomm, printFlag);
             if (!pRPA->eig_useLAPACK) { // if we use ScaLapack, not Lapack, to solve eigenpairs of YT*\nu\Chi0*Y, we have to orthogonalize Y
                 // because ScaLapack does not support solving AX = BX\Lambda with non-symmetric A or B
-                Y_orth_kpt(pSPARC, pRPA, pSPARC->Nd_d, pSPARC->Nspinor_eig, printFlag);
+                Y_orth_kpt(pSPARC, pRPA, pSPARC->Nd_d_dmcomm, pSPARC->Nspinor_eig, printFlag);
             }
-            nuChi0_mult_vectors_kpt(pSPARC, pRPA, qptIndex, omegaIndex, pRPA->Ys_kpt_phi, pRPA->deltaVs_kpt_phi, pRPA->nNuChi0Eigscomm, flagNoDmcomm); // deltaVs_kpt_phi = (\nu\chi0)*Ys_kpt_phi for saving memory
-            project_YT_nuChi0_Y_kpt(pRPA, qptIndex, omegaIndex, flagNoDmcomm, pSPARC->dmcomm_phi, pSPARC->Nd_d, pSPARC->Nspinor_eig, pSPARC->isGammaPoint, printFlag);
-            generalized_eigenproblem_solver_kpt(pRPA, pSPARC->dmcomm_phi, pRPA->nuChi0BlacsComm, pSPARC->eig_paral_blksz, &signImag, printFlag);
+            nuChi0_mult_vectors_kpt(pSPARC, pRPA, qptIndex, omegaIndex, pRPA->Ys_kpt, pRPA->deltaVs_kpt, pRPA->nNuChi0Eigscomm, flagNoDmcomm); // deltaVs_kpt = (\nu\chi0)*Ys_kpt for saving memory
+            project_YT_nuChi0_Y_kpt(pRPA, pSPARC->dmcomm, pSPARC->Nd_d_dmcomm, pSPARC->Nspinor_eig, flagNoDmcomm, printFlag);
+            generalized_eigenproblem_solver_kpt(pRPA, pSPARC->dmcomm, pRPA->nuChi0BlacsComm, pSPARC->eig_paral_blksz, &signImag, printFlag);
             if (signImag > 0) printf("WARNING: qpt %d, omega %d found eigenvalue has large imag part.\n", qptIndex, omegaIndex);
-            subspace_rotation_unify_eigVecs_kpt(pSPARC, pRPA, pSPARC->dmcomm_phi, pSPARC->Nd_d, pSPARC->Nspinor_eig,  pRPA->deltaVs_phi, printFlag);
+            subspace_rotation_unify_eigVecs_kpt(pSPARC, pRPA, pSPARC->dmcomm, pSPARC->Nd_d_dmcomm, pSPARC->Nspinor_eig,  pRPA->deltaVs, printFlag);
+            MPI_Bcast(pRPA->RRoriginSeqEigs, pRPA->nuChi0Neig, MPI_DOUBLE, 0, pRPA->nuChi0EigsBridgeComm); // broadcast the eigenvalues to all processors of all nuChi0Eigscomms
+            error = evaluate_cheFSI_error_kpt(pSPARC, pRPA, qptIndex, omegaIndex, flagNoDmcomm);
             if (pRPA->npnuChi0Neig > 1) {
-                free(pRPA->Ys_kpt_phi_BLCYC);
+                free(pRPA->Ys_kpt_BLCYC);
             }
         }
         if (!pRPA->nuChi0EigscommIndex) { // rank 0 in a nuChi0Eigscomm must be in dmcomm_phi of this nuChi0Eigscomm
         // if pRPA->nuChi0EigscommIndex == 0, then all processors in its dmcomm_phi contain all the eigenvalues
             if (!rank) { // to make things simple, just ask rank 0 of the 0th nuChi0Eigscomm to compute convergence
                 ErpaTerm = compute_ErpaTerm(pRPA->RRnuChi0Eigs, pRPA->nuChi0Neig, pRPA->omega01[omegaIndex], qptOmegaWeight);
-                flagCheb = fabs(ErpaTerm - lastErpaTerm) > tolErpaTermConverge ? 1 : 0;
-                if (ncheb == pRPA->maxitFiltering) flagCheb = 0;
-                lastErpaTerm = ErpaTerm;
-                printf("qpt %d, omega %d, CheFSI loop %d, ErpaTerm %.6f, flagCheb %d\n", qptIndex, omegaIndex, ncheb, ErpaTerm, flagCheb);
+                flagCheb = error > tolRelEigError ? 1 : 0;
+                if (ncheb == pRPA->maxitFiltering - 1) flagCheb = 0;
+                printf("qpt %d, omega %d, CheFSI loop %d, ErpaTerm %.6f, relative eig error %.3E, flagCheb %d\n", qptIndex, omegaIndex, ncheb, ErpaTerm, error, flagCheb);
             }
             MPI_Bcast(&flagCheb, 1, MPI_INT, 0, pRPA->nuChi0Eigscomm);
         }
@@ -290,16 +267,31 @@ void cheFSI_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int omegaIndex) 
         t2 = MPI_Wtime();
         if ((!pRPA->nuChi0EigscommIndex) && (!rank)) {
             FILE *output_fp = fopen(pRPA->filename_out,"a");
-            fprintf(output_fp,"%5d   %.5f       ", ncheb + 1, ErpaTerm);
-            for (int eigIndex = 0; eigIndex < outputEigAmount; eigIndex++) {
+            fprintf(output_fp,"% 3d     %.3E    ", ncheb + 1, ErpaTerm / (double)pSPARC->n_atom);
+            for (int eigIndex = 0; eigIndex < outputFirstEigAmount; eigIndex++) {
                 fprintf(output_fp, "%.5f ", pRPA->RRnuChi0Eigs[eigIndex]);
             }
-            fprintf(output_fp, " %.3f\n", t2 - t1);
+            fprintf(output_fp, "; ");
+            for (int eigIndex = pRPA->nuChi0Neig - outputLastEigAmount; eigIndex < pRPA->nuChi0Neig; eigIndex++) {
+                fprintf(output_fp, "%.5f ", pRPA->RRnuChi0Eigs[eigIndex]);
+            }
+            fprintf(output_fp, " %.3E %.2f\n", error, iniErrorTime + minEigValueTime + t2 - t1);
             fclose(output_fp);
         }
         ncheb++;
-        if (ncheb == 1) printFlag = 0;
+        if (ncheb == 1) {
+            printFlag = 0;
+            iniErrorTime = 0.0;
+            minEigValueTime = 0.0;
+        }
+        MPI_Barrier(pRPA->nuChi0Eigscomm);
     }
+    #ifdef DEBUG
+    if ((!pRPA->nuChi0EigscommIndex) && (!rank)) {
+        printf("omega %d, sumFilteringTime %.3f ms, sumYT_mul_YTime %.3f ms, sumYT_operator_YTime %.3f ms, sumEigTime %.3f ms, sumRotationTime %.3f ms, sumEvaluateErrTime %.3f ms\n",
+         omegaIndex, sumFilteringTime*1e3, sumYT_mul_YTime*1e3, sumYT_operator_YTime*1e3, sumEigTime*1e3, sumRotationTime*1e3, sumEvaluateErrTime*1e3);
+    }
+    #endif
     pRPA->ErpaTerms[qptIndex*pRPA->Nomega + omegaIndex] = ErpaTerm;
 }
 
@@ -318,19 +310,19 @@ double find_min_eigenvalue(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int o
         }
         minEig = -vec2norm;
         if (pSPARC->isGammaPoint) {
-            nuChi0_mult_vectors_gamma(pSPARC, pRPA, omegaIndex, pRPA->deltaVs_phi, pRPA->deltaVs_phi, nuChi0EigsAmount, flagNoDmcomm);
-            if (pSPARC->dmcomm_phi != MPI_COMM_NULL) {
-                Vector2Norm(pRPA->deltaVs_phi, pSPARC->Nd_d, &vec2norm, pSPARC->dmcomm_phi);
-                VectorScale(pRPA->deltaVs_phi, pSPARC->Nd_d, 1.0/vec2norm, pSPARC->dmcomm_phi);
+            nuChi0_mult_vectors_gamma(pSPARC, pRPA, omegaIndex, pRPA->deltaVs, pRPA->deltaVs, nuChi0EigsAmount, flagNoDmcomm, 0);
+            if (!flagNoDmcomm) {
+                Vector2Norm(pRPA->deltaVs, pSPARC->Nd_d_dmcomm, &vec2norm, pSPARC->dmcomm);
+                VectorScale(pRPA->deltaVs, pSPARC->Nd_d_dmcomm, 1.0/vec2norm, pSPARC->dmcomm);
             }
         } else {
             if (!pSPARC->isGammaPoint) { // current kpt calculation is not available
                 loopFlag = 0;
             }
-            nuChi0_mult_vectors_kpt(pSPARC, pRPA, qptIndex, omegaIndex, pRPA->deltaVs_kpt_phi, pRPA->deltaVs_kpt_phi, nuChi0EigsAmount, flagNoDmcomm);
-            if (pSPARC->dmcomm_phi != MPI_COMM_NULL) {
-                Vector2Norm_complex(pRPA->deltaVs_kpt_phi, pSPARC->Nd_d, &vec2norm, pSPARC->dmcomm_phi);
-                VectorScaleComplex(pRPA->deltaVs_kpt_phi, pSPARC->Nd_d, 1.0/vec2norm, pSPARC->dmcomm_phi);
+            nuChi0_mult_vectors_kpt(pSPARC, pRPA, qptIndex, omegaIndex, pRPA->deltaVs_kpt, pRPA->deltaVs_kpt, nuChi0EigsAmount, flagNoDmcomm);
+            if (!flagNoDmcomm) {
+                Vector2Norm_complex(pRPA->deltaVs_kpt, pSPARC->Nd_d, &vec2norm, pSPARC->dmcomm);
+                VectorScaleComplex(pRPA->deltaVs_kpt, pSPARC->Nd_d, 1.0/vec2norm, pSPARC->dmcomm);
             }
         }
         MPI_Bcast(&vec2norm, 1, MPI_DOUBLE, 0, pRPA->nuChi0Eigscomm);
@@ -341,6 +333,90 @@ double find_min_eigenvalue(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int o
     if (!rank) printf("qpt %d, omega %d, iterated for %d times, found minEig %.5E\n", qptIndex, omegaIndex, iter, minEig);
     #endif
     return minEig;
+}
+
+double estimate_initialError(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int omegaIndex, int flagNoDmcomm) {
+    int rank;
+    MPI_Comm_rank(pRPA->nuChi0Eigscomm, &rank);
+    double error = 0.0;
+    double t1, t2;
+    if (pSPARC->isGammaPoint) {
+        #ifdef DEBUG
+        t1 = MPI_Wtime();
+        #endif
+        nuChi0_mult_vectors_gamma(pSPARC, pRPA, omegaIndex, pRPA->deltaVs, pRPA->Ys, pRPA->nNuChi0Eigscomm, flagNoDmcomm, 1); // Ys = (\nu\chi0)*deltaVs for saving memory
+        MPI_Barrier(pRPA->nuChi0EigsBridgeComm);
+        #ifdef DEBUG
+        t2 = MPI_Wtime();
+        if ((!rank) && (!pRPA->nuChi0EigscommIndex)) {
+            printf("In function estimate_initialError, omega %d, operator nu^0.5 chi0 nu^0.5 multiplying vectors spent %.2E ms.\n", omegaIndex + 1, (t2 - t1)*1e3);
+        }
+        #endif
+        if (pRPA->npnuChi0Neig > 1) {
+            pRPA->Ys_BLCYC = (double *)malloc(pRPA->nr_orb_BLCYC * pRPA->nc_orb_BLCYC * sizeof(double));
+        } else {
+            pRPA->Ys_BLCYC = pRPA->deltaVs;
+        }
+        #ifdef DEBUG
+        t1 = MPI_Wtime();
+        #endif
+        YT_multiply_Y_gamma(pRPA, pSPARC->dmcomm, pRPA->deltaVs, pSPARC->Nd_d_dmcomm, pSPARC->Nspinor_eig, flagNoDmcomm, 0);
+        MPI_Barrier(pRPA->nuChi0EigsBridgeComm);
+        #ifdef DEBUG
+        t2 = MPI_Wtime();
+        if ((!rank) && (!pRPA->nuChi0EigscommIndex)) {
+            printf("In function estimate_initialError, omega %d, YT_multiply_Y spent %.2E ms.\n", omegaIndex + 1, (t2 - t1)*1e3);
+        }
+        #endif
+        if (!pRPA->nuChi0EigsBridgeCommIndex) {
+            #ifdef DEBUG
+            t1 = MPI_Wtime();
+            #endif
+            project_YT_nuChi0_Y_gamma(pRPA, pSPARC->dmcomm, pRPA->Ys_BLCYC, pRPA->Ys, pSPARC->Nd_d_dmcomm, pSPARC->Nspinor_eig, flagNoDmcomm, 0);
+            #ifdef DEBUG
+            t2 = MPI_Wtime();
+            if ((!rank) && (!pRPA->nuChi0EigscommIndex)) {
+                printf("In function estimate_initialError, omega %d, project_YT_operator_Y spent %.2E ms.\n", omegaIndex + 1, (t2 - t1)*1e3);
+            }
+            t1 = MPI_Wtime();
+            #endif
+            generalized_eigenproblem_solver_gamma(pRPA, pSPARC->dmcomm, pRPA->nuChi0BlacsComm, pSPARC->eig_paral_blksz, flagNoDmcomm, 0); // pSPARC->eig_paral_blksz
+            #ifdef DEBUG
+            t2 = MPI_Wtime();
+            if ((!rank) && (!pRPA->nuChi0EigscommIndex)) {
+                printf("In function estimate_initialError, omega %d, eigenproblem_solver spent %.2E ms.\n", omegaIndex + 1, (t2 - t1)*1e3);
+            }
+            t1 = MPI_Wtime();
+            #endif
+            subspace_rotation_unify_eigVecs_gamma(pSPARC, pRPA, pSPARC->dmcomm, pSPARC->Nd_d_dmcomm, pSPARC->Nspinor_eig, pRPA->deltaVs, flagNoDmcomm, 0);
+            #ifdef DEBUG
+            t2 = MPI_Wtime();
+            if ((!rank) && (!pRPA->nuChi0EigscommIndex)) {
+                printf("In function estimate_initialError, omega %d, subspace_rotation spent %.2E ms.\n", omegaIndex + 1, (t2 - t1)*1e3);
+            }
+            #endif
+            MPI_Bcast(pRPA->RRnuChi0Eigs, pRPA->nuChi0Neig, MPI_DOUBLE, 0, pRPA->nuChi0BlacsComm);
+        }
+        MPI_Bcast(pRPA->deltaVs, pSPARC->Nd * pRPA->nNuChi0Eigscomm, MPI_DOUBLE, 0, pRPA->nuChi0Eigscomm);
+        MPI_Bcast(pRPA->RRnuChi0Eigs, pRPA->nuChi0Neig, MPI_DOUBLE, 0, pRPA->nuChi0Eigscomm);
+        #ifdef DEBUG
+        t1 = MPI_Wtime();
+        #endif
+        error = evaluate_cheFSI_error_gamma(pSPARC, pRPA, omegaIndex, flagNoDmcomm);
+        #ifdef DEBUG
+        t2 = MPI_Wtime();
+        if ((!rank) && (!pRPA->nuChi0EigscommIndex)) {
+            printf("In function estimate_initialError, omega %d, evaluate_cheFSI_error spent %.2E ms.\n", omegaIndex + 1, (t2 - t1)*1e3);
+        }
+        #endif
+        MPI_Bcast(&error, 1, MPI_DOUBLE, 0, pRPA->nuChi0Eigscomm);
+        if (pRPA->npnuChi0Neig > 1) {
+            free(pRPA->Ys_BLCYC);
+        }
+    } else {
+
+    }
+    return error;
 }
 
 double compute_ErpaTerm(double *RRnuChi0Eigs, int nuChi0Neig, double omegaMesh01, double qptOmegaWeight) {

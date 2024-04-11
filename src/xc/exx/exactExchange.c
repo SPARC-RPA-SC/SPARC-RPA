@@ -47,6 +47,7 @@
 #include "parallelization.h"
 #include "electronicGroundState.h"
 #include "exchangeCorrelation.h"
+#include "kroneckerLaplacian.h"
 
 #define max(a,b) ((a)>(b)?(a):(b))
 #define min(a,b) ((a)<(b)?(a):(b))
@@ -748,6 +749,32 @@ void poissonSolve(SPARC_OBJ *pSPARC, double *rhs, double *pois_FFT_const,
         for (k = 0; k < lsize; k++) 
             free(DMVertices[k]);
         free(DMVertices);
+    }
+}
+
+/**
+ * @brief   Solve Poisson's equation using FFT in Fourier Space
+ * 
+ * @param rhs               complete RHS of poisson's equations without parallelization. 
+ * @param pois_const        constant for solving possion's equations
+ * @param ncol              Number of poisson's equations to be solved.
+ * @param sol               complete solutions of poisson's equations without parallelization. 
+ * Note:                    This function is complete localized. 
+ */
+void pois_kron(SPARC_OBJ *pSPARC, double *rhs, double *pois_const, int ncol, double *sol)
+{
+    if (ncol == 0) return;
+    int Nd = pSPARC->Nd;
+    KRON_LAP* kron_lap = pSPARC->kron_lap_exx;
+
+    if (pSPARC->BC == 2) {
+        for (int n = 0; n < ncol; n++) {
+            Lap_Kron(kron_lap->Nx, kron_lap->Ny, kron_lap->Nz, kron_lap->Vx, kron_lap->Vy, kron_lap->Vz,
+                    rhs + n*Nd, pois_const, sol + n*Nd);
+        }
+    } else {
+        printf(RED "ERROR: Currently RPA calculation does not support Derichlet BC!\n" RESET);
+        exit(EXIT_FAILURE);
     }
 }
 

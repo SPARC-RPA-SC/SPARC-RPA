@@ -28,18 +28,18 @@
  ├──initialize_deltaVs
  ├──test_Hx_nuChi0
  ├──cheFSI_RPA
+ |  ├──(if gamma point) collect_allXorb_allLambdas_gamma
+ |  ├──(if k-point) collect_allXorb_allLambdas_kpt
  |  ├──find_min_eigenvalue
  |  ├──(if gamma point) chebyshev_filtering_gamma
  |  |  └──nuChi0_mult_vectors_gamma
- |  |     ├──Transfer_Veff_loc_RPA
  |  |     ├──sternheimer_eq_gamma
  |  |     |  └──sternheimer_eq_gamma
  |  |     |     └──sternheimer_solver_gamma
  |  |     |        ├──Sternheimer_lhs
  |  |     |        ├──set_initial_guess_deltaPsis
  |  |     |        └──block_COCG
- |  |     ├──collect_transfer_deltaRho_gamma
- |  |     |  └──transfer_deltaRho
+ |  |     ├──collect_deltaRho_gamma
  |  |     └──Calculate_deltaRhoPotential_gamma
  |  |        └──poissonSolver_gamma
  |  |
@@ -48,25 +48,27 @@
  |  ├──project_YT_nuChi0_Y_gamma
  |  ├──generalized_eigenproblem_solver_gamma
  |  ├──subspace_rotation_unify_eigVecs_gamma
+ |  ├──evaluate_cheFSI_error_gamma
  |  |
  |  ├──(if k-point) chebyshev_filtering_kpt 
  |  |  └──nuChi0_mult_vectors_kpt
- |  |     ├──Transfer_Veff_loc_RPA_kpt
  |  |     ├──sternheimer_eq_kpt
  |  |     |  └──sternheimer_eq_kpt
  |  |     |     └──sternheimer_solver_kpt
  |  |     |        ├──Sternheimer_lhs_kpt
  |  |     |        ├──set_initial_guess_deltaPsis_kpt
  |  |     |        └──solver_kpt
- |  |     ├──collect_transfer_deltaRho_kpt
- |  |     |  └──transfer_deltaRho_kpt
+ |  |     ├──collect_deltaRho_kpt
  |  |     └──Calculate_deltaRhoPotential_kpt
  |  |        └──poissonSolver_kpt
  |  ├──YT_multiply_Y_kpt
  |  ├──nuChi0_mult_vectors_kpt
  |  ├──project_YT_nuChi0_Y_kpt
  |  ├──generalized_eigenproblem_solver_kpt
- |  └──subspace_rotation_unify_eigVecs_kpt
+ |  ├──subspace_rotation_unify_eigVecs_kpt
+ |  ├──evaluate_cheFSI_error_kpt
+ |  |
+ |  └──compute_ErpaTerm
  |
  ├──rpaIntegrationOnOmega
  └──finalization
@@ -81,6 +83,7 @@
 #include "initialization_RPA.h"
 #include "restoreElectronicGroundState.h"
 #include "prepare_PQ_operators.h"
+#include "test_Hx_nuChi0_eigSolver.h"
 #include "cheFSI.h"
 #include "printResult.h"
 #include "finalization_RPA.h"
@@ -106,7 +109,7 @@ int main(int argc, char *argv[]) {
 
     restore_electronicGroundState(&SPARC, RPA.nuChi0Eigscomm, RPA.nuChi0EigsBridgeComm, RPA.nuChi0EigscommIndex, RPA.rank0nuChi0EigscommInWorld, RPA.k1, RPA.k2, RPA.k3, RPA.kPqSymList, RPA.Nkpts_sym);
 
-    prepare_PQ_operators(&SPARC, &RPA);
+    // prepare_PQ_operators(&SPARC, &RPA);
 
     initialize_deltaVs(&SPARC, &RPA);
 
@@ -114,6 +117,11 @@ int main(int argc, char *argv[]) {
     if (testFlag) {
         test_Hx_nuChi0(&SPARC, &RPA);
     }
+
+    // int testEigFlag = 0;
+    // if (testEigFlag) {
+    //     test_eigSolver(&SPARC, &RPA);
+    // }
 
     for (int qptIndex = 0; qptIndex < RPA.Nqpts_sym; qptIndex++) {
         for (int omegaIndex = 0; omegaIndex < RPA.Nomega; omegaIndex++) {

@@ -70,6 +70,8 @@ void evaluate_exact_exchange_energy(SPARC_OBJ *pSPARC);
 void poissonSolve(SPARC_OBJ *pSPARC, double *rhs, double *pois_FFT_const, 
                     int ncol, int DMnd, int *dims, double *Vi, MPI_Comm comm);
 
+void pois_kron(SPARC_OBJ *pSPARC, double *rhs, double *pois_const, int ncol, double *sol);
+
 /**
  * @brief   preprocessing RHS of Poisson's equation depends on the method for Exact Exchange
  */
