@@ -132,7 +132,7 @@ void cheFSI_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int omegaIndex) 
     int ncheb = 0;
     int signImag = 0;
     int chebyshevDegree = pRPA->ChebDegreeRPA;
-    int printFlag = 1; // for midvariables output
+    int printFlag = 0; // for midvariables output
     double error = 0.0;
     double t3, t4;
     double sumFilteringTime = 0.0, sumYT_mul_YTime = 0.0, sumYT_operator_YTime = 0.0, sumEigTime = 0.0, sumRotationTime = 0.0, sumEvaluateErrTime = 0.0;
@@ -344,7 +344,7 @@ double estimate_initialError(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int
         #ifdef DEBUG
         t1 = MPI_Wtime();
         #endif
-        nuChi0_mult_vectors_gamma(pSPARC, pRPA, omegaIndex, pRPA->deltaVs, pRPA->Ys, pRPA->nNuChi0Eigscomm, flagNoDmcomm, 1); // Ys = (\nu\chi0)*deltaVs for saving memory
+        nuChi0_mult_vectors_gamma(pSPARC, pRPA, omegaIndex, pRPA->deltaVs, pRPA->Ys, pRPA->nNuChi0Eigscomm, flagNoDmcomm, 0); // Ys = (\nu\chi0)*deltaVs for saving memory
         MPI_Barrier(pRPA->nuChi0EigsBridgeComm);
         #ifdef DEBUG
         t2 = MPI_Wtime();
