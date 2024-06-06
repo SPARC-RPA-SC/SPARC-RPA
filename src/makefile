@@ -104,7 +104,7 @@ OBJSC = main.o initialization.o readfiles.o atomdata.o parallelization.o relax.o
 LIBBASE = ../lib/sparc
 TESTBASE = ../.ci
 
-override CC=mpicc
+override CC=mpiicc
 
 all: sparc
 

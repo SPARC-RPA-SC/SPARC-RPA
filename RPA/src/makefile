@@ -108,7 +108,7 @@ OBJSC = main.o initialization_SPARC.o initialization_RPA.o generateKgrid.o paral
 
 LIBBASE = ../lib/rpacalc
 
-override CC=mpicc
+override CC=mpiicc
 
 all: rpacalc
 

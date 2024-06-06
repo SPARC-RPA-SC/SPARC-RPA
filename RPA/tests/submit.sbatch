@@ -8,6 +8,6 @@ cd $SLURM_SUBMIT_DIR
 
 module purge
 module load intel
-module load mvapich2
+module load intel-mpi
 
 srun ../../lib/rpacalc -name Si8 > out.log
