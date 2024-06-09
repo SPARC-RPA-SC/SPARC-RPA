@@ -1,8 +1,9 @@
 #!/bin/bash
 #SBATCH -J Si24_RPA_SC
-#SBATCH -N 1 --ntasks-per-node=24
+#SBATCH --account=gts-echow7-coda20
+#SBATCH -N 4 --ntasks-per-node=24
 #SBATCH --mem-per-cpu=7G
-#SBATCH -t 1:00:00
+#SBATCH -t 0:15:00
 #SBATCH -o Report-%j.out
 cd $SLURM_SUBMIT_DIR
 
