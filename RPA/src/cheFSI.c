@@ -363,7 +363,7 @@ double estimate_initialError(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int
         #ifdef DEBUG
         t1 = MPI_Wtime();
         #endif
-        YT_multiply_Y_gamma(pRPA, pSPARC->dmcomm, pRPA->deltaVs, pSPARC->Nd_d_dmcomm, pSPARC->Nspinor_eig, flagNoDmcomm, 1);
+        YT_multiply_Y_gamma(pRPA, pSPARC->dmcomm, pRPA->deltaVs, pSPARC->Nd_d_dmcomm, pSPARC->Nspinor_eig, flagNoDmcomm, 0);
         MPI_Barrier(pRPA->nuChi0EigsBridgeComm);
         #ifdef DEBUG
         t2 = MPI_Wtime();
