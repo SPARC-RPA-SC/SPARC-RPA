@@ -89,7 +89,7 @@ void cheFSI_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int omegaIndex) 
     iniErrorTime = t2 - t1;
     #ifdef DEBUG
     if ((!rank) && (!nuChi0EigscommIndex)) {
-        printf("omega %d, estimate_initialError spent %.2E ms.\n", omegaIndex, iniErrorTime);
+        printf("omega %d, subspace iteration 0, estimate_initialError spent %.2E ms.\n", omegaIndex+1, (1e3)*iniErrorTime);
     }
     #endif
     if (initialError < tolRelEigError) { // if the initial eigenvectors are very good, then no need to do Chebyshev filtering!
@@ -225,6 +225,9 @@ void cheFSI_RPA(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int omegaIndex) 
             #ifdef DEBUG
             t4 = MPI_Wtime();
             sumEvaluateErrTime += t4 - t3;
+            if ((!rank) && (!nuChi0EigscommIndex)) {
+                printf("omega %d, subspace iteration %d, eval cheFSI error spent %.2E ms.\n", omegaIndex + 1, ncheb + 1, (t4 - t3)*1e3);
+            }
             #endif
             if (pRPA->npnuChi0Neig > 1) {
                 free(pRPA->Ys_BLCYC);
@@ -360,7 +363,7 @@ double estimate_initialError(SPARC_OBJ *pSPARC, RPA_OBJ *pRPA, int qptIndex, int
         #ifdef DEBUG
         t1 = MPI_Wtime();
         #endif
-        YT_multiply_Y_gamma(pRPA, pSPARC->dmcomm, pRPA->deltaVs, pSPARC->Nd_d_dmcomm, pSPARC->Nspinor_eig, flagNoDmcomm, 0);
+        YT_multiply_Y_gamma(pRPA, pSPARC->dmcomm, pRPA->deltaVs, pSPARC->Nd_d_dmcomm, pSPARC->Nspinor_eig, flagNoDmcomm, 1);
         MPI_Barrier(pRPA->nuChi0EigsBridgeComm);
         #ifdef DEBUG
         t2 = MPI_Wtime();

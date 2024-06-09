@@ -11,3 +11,4 @@ module load intel
 module load intel-mpi
 
 srun ../../lib/rpacalc -name Si8 > out.log
+grep -i "subspace iteration" out.log > subtimings.log

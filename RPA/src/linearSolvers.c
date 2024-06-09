@@ -168,12 +168,14 @@ int block_COCG(void (*lhsfun)(SPARC_OBJ*, int, double *, double, double, int, do
         memcpy(rho, rhoNew, sizeof(double _Complex)*nuChi0EigsAmounts*nuChi0EigsAmounts); // rho = rho_new;
     }
     *lhsTime = lhsTimeRecord; *solveMuTime = solveMuTimeRecord; *multipleTime = multipleTimeRecord;
+    /*
     printf("block COCG iterated for %d times; residual %.6E", ix, resNormRecords[ix*nuChi0EigsAmounts]);
     if (ix == maxIter) {
         printf("It terminated without converging to the desired tolerance.\n");
     } else {
         printf("\n");
     }
+    */
 
     free(RHS2norm);
     free(LHSx);
