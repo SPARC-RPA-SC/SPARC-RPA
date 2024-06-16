@@ -1200,6 +1200,7 @@ double* readDens_cube(char *filename, int dens_gridsizes[3], double dens_latvecs
 		}
 	}
 
+    fclose(dens_fp);
     return dens;
 }
 
