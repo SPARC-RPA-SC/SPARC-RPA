@@ -76,6 +76,7 @@ endif
 
 # for old Intel compiler, use -qopenmp instead of -fopenmp. ICC 17 and later also accepts -fopenmp. 
 CFLAGS = -std=gnu99 -O3 -fopenmp
+RFLAGS = -std=gnu99 -O1 -fopenmp
 
 OBJSC = main.o initialization.o readfiles.o atomdata.o parallelization.o relax.o tools.o md.o      \
         electrostatics.o electronicGroundState.o electronDensity.o orbitalElecDensInit.o           \
@@ -114,6 +115,9 @@ all: sparc
 
 sparc: $(OBJSC)
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $(LIBBASE) $^ $(LDLIBS)
+
+readfiles.o: readfiles.c
+	$(CC) -c $(RFLAGS) $(CPPFLAGS) $< -o $@
 
 .PHONY: clean
 clean:
