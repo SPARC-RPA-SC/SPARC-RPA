@@ -74,8 +74,7 @@ ifeq ($(ENABLE_SIMD_COMPLEX), 1)
 CPPFLAGS += -DENABLE_SIMD_COMPLEX
 endif
 
-# for old Intel compiler, use -qopenmp instead of -fopenmp. ICC 17 and later also accepts -fopenmp. 
-CFLAGS = -std=gnu99 -O3 -fopenmp
+CFLAGS = -std=gnu99 -O3 -qopenmp
 
 SPARC_OBJSC = ../../src/initialization.o ../../src/readfiles.o ../../src/atomdata.o ../../src/parallelization.o ../../src/relax.o ../../src/tools.o ../../src/md.o      \
         ../../src/electrostatics.o ../../src/electronicGroundState.o ../../src/electronDensity.o ../../src/orbitalElecDensInit.o           \
